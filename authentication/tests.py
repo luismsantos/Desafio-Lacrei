@@ -19,7 +19,7 @@ class AuthenticationAPITest(APITestCase):
         self.test_user = User.objects.create_user(
             username="testuser",
             email="test@example.com",
-            password="testpass123",
+            password="testpass123",  # nosec B106
             first_name="Test",
             last_name="User",
         )

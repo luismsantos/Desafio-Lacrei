@@ -6,7 +6,7 @@ class AuthenticatedTestMixin:
     """Mixin para facilitar testes com autenticação JWT"""
 
     def create_test_user(
-        self, username="testuser", email="test@example.com", password="testpass123"
+        self, username="testuser", email="test@example.com", password="testpass123"  # nosec B107
     ):
         """Cria um usuário de teste"""
         return User.objects.create_user(
