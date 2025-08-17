@@ -1,7 +1,8 @@
-from django.http import JsonResponse
-from django.db import connection
-from django.conf import settings
 import logging
+
+from django.conf import settings
+from django.db import connection
+from django.http import JsonResponse
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,8 @@ def readiness_check(request):
     """
     try:
         # Verificações mais abrangentes
-        from django.core.management import execute_from_command_line
         from django.apps import apps
+        from django.core.management import execute_from_command_line
 
         # Verificar se todas as apps estão carregadas
         if not apps.ready:

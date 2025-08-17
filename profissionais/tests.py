@@ -1,11 +1,14 @@
 # tests.py para o app profissionais
 
-from django.test import TestCase
-from rest_framework.test import APITestCase
 from rest_framework import status
+from rest_framework.test import APITestCase
+
+from django.test import TestCase
 from django.urls import reverse
-from .models import Profissional
+
 from authentication.test_mixins import AuthenticatedTestMixin
+
+from .models import Profissional
 
 
 class ProfissionalModelTest(TestCase):

@@ -1,10 +1,12 @@
-from django.shortcuts import render
 from rest_framework import viewsets
-from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
+from django.shortcuts import render
+
 from .models import Consulta
-from .serializers import ConsultaSerializer, ConsultaDetalheSerializer
+from .serializers import ConsultaDetalheSerializer, ConsultaSerializer
 
 
 class ConsultaViewSet(viewsets.ModelViewSet):

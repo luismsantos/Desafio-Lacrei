@@ -1,11 +1,15 @@
+from datetime import timedelta
+
+from rest_framework import status
+from rest_framework.test import APITestCase
+
 from django.urls import reverse
 from django.utils import timezone
-from rest_framework.test import APITestCase
-from rest_framework import status
-from profissionais.models import Profissional
-from .models import Consulta
-from datetime import timedelta
+
 from authentication.test_mixins import AuthenticatedTestMixin
+from profissionais.models import Profissional
+
+from .models import Consulta
 
 
 class ConsultaAPITest(AuthenticatedTestMixin, APITestCase):

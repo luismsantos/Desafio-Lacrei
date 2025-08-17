@@ -1,6 +1,8 @@
 from rest_framework import serializers
-from .models import Consulta, Profissional
+
 from django.utils import timezone
+
+from .models import Consulta, Profissional
 
 
 class ConsultaSerializer(serializers.ModelSerializer):

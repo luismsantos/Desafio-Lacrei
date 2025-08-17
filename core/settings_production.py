@@ -1,5 +1,6 @@
 # Configurações específicas para produção
 import os
+
 from .settings import *  # noqa: F403
 
 # Desabilitar debug em produção

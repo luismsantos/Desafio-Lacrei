@@ -1,11 +1,13 @@
-from django.shortcuts import render
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
+
+from django.shortcuts import render
+
 from .models import Profissional
 from .serializers import (
-    ProfissionalSerializer,
-    ProfissionalListSerializer,
     ProfissionalDetalheSerializer,
+    ProfissionalListSerializer,
+    ProfissionalSerializer,
 )
 
 

@@ -1,4 +1,5 @@
 from django.db import models
+
 from profissionais.models import Profissional
 
 # Create your models here.
