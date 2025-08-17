@@ -1,7 +1,5 @@
 from django.db import models
 
-# Create your models here.
-
 class Profissional(models.Model):
     nome = models.CharField(max_length=100)
     nome_social = models.CharField(max_length=100, blank=True, null=True)
@@ -11,3 +9,7 @@ class Profissional(models.Model):
 
     def __str__(self):
         return self.nome
+
+    @property
+    def nome_exibicao(self):
+        return self.nome_social if self.nome_social else self.nome
