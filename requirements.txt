@@ -1,0 +1,15 @@
+# Este arquivo é gerado automaticamente a partir do pyproject.toml
+# Para instalar as dependências, use preferencialmente Poetry:
+# poetry install
+#
+# Caso não tenha Poetry instalado, pode usar:
+# pip install -r requirements.txt
+
+Django==5.1.4
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.5.1
+drf-yasg==1.21.10
+django-cors-headers==4.6.0
+dj-database-url==2.3.0
+psycopg2-binary==2.9.10
+python-decouple==3.8
