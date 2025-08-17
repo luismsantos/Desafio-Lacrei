@@ -1,0 +1,52 @@
+version: 2
+updates:
+  # Atualizações para Poetry/Python
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    reviewers:
+      - "luismsantos"
+    assignees:
+      - "luismsantos"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    open-pull-requests-limit: 5
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    
+  # Atualizações para GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    reviewers:
+      - "luismsantos"
+    assignees:
+      - "luismsantos"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    open-pull-requests-limit: 3
+    
+  # Atualizações para Docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    reviewers:
+      - "luismsantos"
+    assignees:
+      - "luismsantos"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    open-pull-requests-limit: 2

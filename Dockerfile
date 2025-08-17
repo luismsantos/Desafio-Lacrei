@@ -1,30 +1,62 @@
-# Imagem base com Python 3.11 slim
-FROM python:3.13-slim
+# Multi-stage build para otimizar imagem
+FROM python:3.11-slim as builder
 
-# Instalar dependências do sistema para compilação e PostgreSQL client
+# Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
+# Instalar Poetry
+RUN pip install poetry==1.6.1
 
-# Adiciona Poetry ao PATH
-ENV PATH="/root/.local/bin:$PATH"
+# Configurar Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
 
-# Copia arquivos de dependências para instalar pacotes
+# Copiar arquivos de dependência
+WORKDIR /app
 COPY pyproject.toml poetry.lock ./
 
-# Instala dependências via Poetry
-RUN poetry install --no-root --without dev
+# Instalar dependências
+RUN poetry install --without dev && rm -rf $POETRY_CACHE_DIR
 
-# Copia o código fonte para o container
-COPY . .
+# Imagem final
+FROM python:3.11-slim as runtime
 
-# Expõe a porta padrão do Django para desenvolvimento
+# Instalar apenas dependências de runtime
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Criar usuário não-root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copiar ambiente virtual
+ENV VIRTUAL_ENV=/app/.venv
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar código da aplicação
+COPY --chown=appuser:appuser . .
+
+# Criar diretório para logs
+RUN mkdir -p /var/log/django && chown appuser:appuser /var/log/django
+
+# Mudar para usuário não-root
+USER appuser
+
+# Expor porta
 EXPOSE 8000
 
-# Comando para rodar o servidor Django (pode ser modificado)
-CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Comando padrão
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

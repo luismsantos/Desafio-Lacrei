@@ -1,0 +1,25 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+        base: auto
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "*/migrations/*"
+  - "*/venv/*"
+  - "*/tests/*"
+  - "manage.py"
+  - "*/settings/*"
+  - "*/urls.py"
+  - "*/__init__.py"

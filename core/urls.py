@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, re_path, include
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from . import health
 from rest_framework import permissions
 
 schema_view = get_schema_view(
@@ -38,6 +39,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     re_path(r'^swagger/$', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    path('health/', health.health_check, name='health-check'),
+    path('ready/', health.readiness_check, name='readiness-check'),
     path('api/auth/', include('authentication.urls')),
     path('api/', include('profissionais.urls')),
     path('api/', include('consultas.urls')),

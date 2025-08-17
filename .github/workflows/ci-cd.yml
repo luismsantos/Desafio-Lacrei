@@ -1,0 +1,323 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  POETRY_VERSION: "1.6.1"
+
+jobs:
+  lint:
+    name: 🔍 Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: ${{ env.POETRY_VERSION }}
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root
+    
+    - name: Install project
+      run: poetry install --no-interaction
+    
+    - name: Run flake8
+      run: |
+        poetry add --group dev flake8
+        poetry run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        poetry run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Run black check
+      run: |
+        poetry add --group dev black
+        poetry run black --check --diff .
+    
+    - name: Run isort check
+      run: |
+        poetry add --group dev isort
+        poetry run isort --check-only --diff .
+
+  test:
+    name: 🧪 Test
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_lacrei_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: ${{ env.POETRY_VERSION }}
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root
+    
+    - name: Install project
+      run: poetry install --no-interaction
+    
+    - name: Run tests
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_lacrei_db
+        SECRET_KEY: test-secret-key-for-ci
+        DEBUG: False
+      run: |
+        poetry run python manage.py test --verbosity=2
+    
+    - name: Generate coverage report
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_lacrei_db
+        SECRET_KEY: test-secret-key-for-ci
+        DEBUG: False
+      run: |
+        poetry add --group dev coverage
+        poetry run coverage run --source='.' manage.py test
+        poetry run coverage xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  build:
+    name: 🐳 Build
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository_owner }}/desafio-lacrei
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Deploy to ECS Staging
+      run: |
+        # Atualizar task definition com nova imagem
+        aws ecs update-service \
+          --cluster desafio-lacrei-staging \
+          --service desafio-lacrei-staging-service \
+          --force-new-deployment
+    
+    - name: Wait for deployment
+      run: |
+        aws ecs wait services-stable \
+          --cluster desafio-lacrei-staging \
+          --services desafio-lacrei-staging-service
+    
+    - name: Run database migrations
+      run: |
+        # Executar migrações no ambiente staging
+        aws ecs run-task \
+          --cluster desafio-lacrei-staging \
+          --task-definition desafio-lacrei-staging-migrate \
+          --launch-type FARGATE \
+          --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.STAGING_SUBNET_IDS }}],securityGroups=[${{ secrets.STAGING_SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}"
+
+  deploy-production:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Blue/Green Deploy to ECS Production
+      run: |
+        # Implementar estratégia Blue/Green
+        # 1. Criar nova task definition
+        TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
+        NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+        NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
+        NEW_REVISION=$(echo $NEW_TASK_INFO | jq '.taskDefinition.revision')
+        
+        # 2. Atualizar serviço com nova task definition
+        aws ecs update-service \
+          --cluster desafio-lacrei-production \
+          --service desafio-lacrei-production-service \
+          --task-definition desafio-lacrei-production:$NEW_REVISION
+    
+    - name: Wait for production deployment
+      run: |
+        aws ecs wait services-stable \
+          --cluster desafio-lacrei-production \
+          --services desafio-lacrei-production-service
+    
+    - name: Run production migrations
+      run: |
+        aws ecs run-task \
+          --cluster desafio-lacrei-production \
+          --task-definition desafio-lacrei-production-migrate \
+          --launch-type FARGATE \
+          --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.PRODUCTION_SUBNET_IDS }}],securityGroups=[${{ secrets.PRODUCTION_SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}"
+    
+    - name: Health check
+      run: |
+        # Verificar se a aplicação está respondendo corretamente
+        for i in {1..10}; do
+          if curl -f ${{ secrets.PRODUCTION_URL }}/health/; then
+            echo "Health check passed"
+            break
+          else
+            echo "Health check failed, attempt $i/10"
+            sleep 30
+          fi
+        done
+
+  rollback:
+    name: 🔄 Rollback
+    runs-on: ubuntu-latest
+    if: failure() && (needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure')
+    needs: [deploy-staging, deploy-production]
+    environment: production
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Rollback to previous version
+      run: |
+        # Obter a task definition anterior
+        CURRENT_TASK_DEF=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].taskDefinition' --output text)
+        CURRENT_REVISION=$(echo $CURRENT_TASK_DEF | cut -d':' -f2)
+        PREVIOUS_REVISION=$((CURRENT_REVISION - 1))
+        
+        # Reverter para a versão anterior
+        aws ecs update-service \
+          --cluster desafio-lacrei-production \
+          --service desafio-lacrei-production-service \
+          --task-definition desafio-lacrei-production:$PREVIOUS_REVISION
+        
+        # Aguardar estabilização
+        aws ecs wait services-stable \
+          --cluster desafio-lacrei-production \
+          --services desafio-lacrei-production-service
+        
+        echo "Rollback completed to revision $PREVIOUS_REVISION"

@@ -27,4 +27,5 @@ build-backend = "poetry.core.masonry.api"
 flake8 = "^7.3.0"
 pytest = "^8.4.1"
 pytest-django = "^4.11.1"
+black = "^25.1.0"
 
