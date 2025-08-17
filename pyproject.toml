@@ -1,26 +1,23 @@
-[project]
+[tool.poetry]
 name = "desafio-lacrei"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "Luis Miguel",email = "luismiguelsantossouza@gmail.com"}
-]
+description = "Sistema de gerenciamento para consultas médicas da Lacrei Saúde"
+authors = ["Luis Miguel <luismiguelsantossouza@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "django (>=5.2.5,<6.0.0)",
-    "djangorestframework (>=3.16.1,<4.0.0)",
-    "psycopg2-binary (>=2.9.10,<3.0.0)",
-    "django-cors-headers (>=4.7.0,<5.0.0)",
-    "dj-database-url (>=3.0.1,<4.0.0)",
-    "drf-yasg (>=1.21.10,<2.0.0)",
-    "djangorestframework-simplejwt (>=5.5.1,<6.0.0)",
-    "python-decouple (>=3.8,<4.0)"
-]
 
+[tool.poetry.dependencies]
+python = "^3.11"
+django = "^5.2.5"
+djangorestframework = "^3.16.1"
+psycopg2-binary = "^2.9.10"
+django-cors-headers = "^4.7.0"
+dj-database-url = "^3.0.1"
+drf-yasg = "^1.21.10"
+djangorestframework-simplejwt = "^5.5.1"
+python-decouple = "^3.8"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]

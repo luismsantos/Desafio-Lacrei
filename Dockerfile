@@ -1,5 +1,5 @@
 # Multi-stage build para otimizar imagem
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
@@ -20,11 +20,12 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY pyproject.toml poetry.lock ./
 
-# Instalar dependências
-RUN poetry install --without dev && rm -rf $POETRY_CACHE_DIR
+# Instalar dependências e exportar requirements
+RUN poetry export -f requirements.txt --output requirements.txt --without dev && \
+    rm -rf $POETRY_CACHE_DIR
 
 # Imagem final
-FROM python:3.11-slim as runtime
+FROM python:3.11-slim AS runtime
 
 # Instalar apenas dependências de runtime
 RUN apt-get update && apt-get install -y \
@@ -34,10 +35,12 @@ RUN apt-get update && apt-get install -y \
 # Criar usuário não-root
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Copiar ambiente virtual
+# Criar ambiente virtual e instalar dependências
 ENV VIRTUAL_ENV=/app/.venv
-COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+RUN python -m venv ${VIRTUAL_ENV}
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+COPY --from=builder /app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Definir diretório de trabalho
 WORKDIR /app
