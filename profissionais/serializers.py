@@ -12,7 +12,15 @@ class ProfissionalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profissional
-        fields = ['id', 'nome', 'nome_social', 'nome_exibicao', 'especialidade', 'email', 'telefone']
+        fields = [
+            "id",
+            "nome",
+            "nome_social",
+            "nome_exibicao",
+            "especialidade",
+            "email",
+            "telefone",
+        ]
 
     def get_nome_exibicao(self, obj):
         return obj.nome_social if obj.nome_social else obj.nome
@@ -33,7 +41,7 @@ class ProfissionalSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("Telefone não pode estar vazio.")
-        if not re.match(r'^[0-9\-\+\(\) ]+$', value):
+        if not re.match(r"^[0-9\-\+\(\) ]+$", value):
             raise serializers.ValidationError("Telefone contém caracteres inválidos.")
         if len(value) < 8:
             raise serializers.ValidationError("Telefone muito curto.")
@@ -42,7 +50,9 @@ class ProfissionalSerializer(serializers.ModelSerializer):
     def validate_nome_social(self, value):
         if value is not None:
             if not value.strip():
-                raise serializers.ValidationError("Nome social, se informado, não pode ser vazio.")
+                raise serializers.ValidationError(
+                    "Nome social, se informado, não pode ser vazio."
+                )
         return value
 
 
@@ -51,7 +61,7 @@ class ProfissionalListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profissional
-        fields = ['id', 'nome_exibicao', 'especialidade', 'email', 'telefone']
+        fields = ["id", "nome_exibicao", "especialidade", "email", "telefone"]
 
     def get_nome_exibicao(self, obj):
         return obj.nome_social if obj.nome_social else obj.nome
@@ -62,7 +72,15 @@ class ProfissionalDetalheSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profissional
-        fields = ['id', 'nome', 'nome_social', 'nome_exibicao', 'especialidade', 'email', 'telefone']
+        fields = [
+            "id",
+            "nome",
+            "nome_social",
+            "nome_exibicao",
+            "especialidade",
+            "email",
+            "telefone",
+        ]
 
     def get_nome_exibicao(self, obj):
         return obj.nome_social if obj.nome_social else obj.nome

@@ -9,18 +9,33 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('profissionais', '0001_initial'),
+        ("profissionais", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Consulta',
+            name="Consulta",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('paciente_nome', models.CharField(max_length=100)),
-                ('data_hora', models.DateTimeField()),
-                ('observacoes', models.TextField(blank=True)),
-                ('profissional', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='consultas', to='profissionais.profissional')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("paciente_nome", models.CharField(max_length=100)),
+                ("data_hora", models.DateTimeField()),
+                ("observacoes", models.TextField(blank=True)),
+                (
+                    "profissional",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="consultas",
+                        to="profissionais.profissional",
+                    ),
+                ),
             ],
         ),
     ]

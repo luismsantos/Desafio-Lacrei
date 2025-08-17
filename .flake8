@@ -1,0 +1,39 @@
+[flake8]
+# Configuração do Flake8 para o projeto
+max-line-length = 88
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .env,
+    migrations,
+    node_modules,
+    .tox,
+    build,
+    dist,
+    *.egg-info,
+    .pytest_cache,
+    .coverage,
+    htmlcov
+
+# Códigos de erro a serem ignorados
+ignore = 
+    E203,  # whitespace before ':'
+    E501,  # line too long (handled by black)
+    W503,  # line break before binary operator
+    F401,  # imported but unused (handled by isort)
+
+# Extensões a serem verificadas
+filename = *.py
+
+# Diretórios a serem incluídos na verificação
+include = 
+    authentication,
+    consultas,
+    core,
+    profissionais
+
+# Complexidade ciclomática máxima
+max-complexity = 10

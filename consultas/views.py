@@ -10,13 +10,13 @@ from .serializers import ConsultaSerializer, ConsultaDetalheSerializer
 class ConsultaViewSet(viewsets.ModelViewSet):
     queryset = Consulta.objects.all()
     serializer_class = ConsultaSerializer
-    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_permissions(self):
         """
         Lista e detalhes são públicos, mas criação, edição e exclusão exigem autenticação
         """
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
@@ -24,7 +24,7 @@ class ConsultaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        profissional_id = self.request.query_params.get('profissional_id')
+        profissional_id = self.request.query_params.get("profissional_id")
         if profissional_id:
             queryset = queryset.filter(profissional_id=profissional_id)
         return queryset
@@ -32,8 +32,10 @@ class ConsultaViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
 
-        if self.request.query_params.get('profissional_id') and not queryset.exists():
-            raise NotFound(detail="Nenhuma consulta encontrada para o profissional informado.")
+        if self.request.query_params.get("profissional_id") and not queryset.exists():
+            raise NotFound(
+                detail="Nenhuma consulta encontrada para o profissional informado."
+            )
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -44,6 +46,6 @@ class ConsultaViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def get_serializer_class(self):
-        if self.action == 'retrieve':
+        if self.action == "retrieve":
             return ConsultaDetalheSerializer
         return ConsultaSerializer

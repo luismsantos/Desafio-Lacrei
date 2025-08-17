@@ -3,8 +3,11 @@ from profissionais.models import Profissional
 
 # Create your models here.
 
+
 class Consulta(models.Model):
-    profissional = models.ForeignKey(Profissional, related_name='consultas', on_delete=models.CASCADE)
+    profissional = models.ForeignKey(
+        Profissional, related_name="consultas", on_delete=models.CASCADE
+    )
     paciente_nome = models.CharField(max_length=100)
     data_hora = models.DateTimeField()
     observacoes = models.TextField(blank=True)
