@@ -34,7 +34,7 @@ Este projeto usa **Poetry** como gerenciador de dependências porque:
 
 - Python 3.11 ou superior
 - Poetry (gerenciador de dependências)
-- PostgreSQL (ou Docker)
+- Docker
 - Git
 
 ## 🔧 Instalação e Configuração
@@ -42,7 +42,7 @@ Este projeto usa **Poetry** como gerenciador de dependências porque:
 ### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/SEU_USUARIO/Desafio-Lacrei.git
+git clone https://github.com/luismsantos/Desafio-Lacrei.git
 cd Desafio-Lacrei
 ```
 
