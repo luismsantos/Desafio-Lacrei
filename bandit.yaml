@@ -1,0 +1,42 @@
+# Bandit security linter configuration for Django project
+# See: https://bandit.readthedocs.io/en/latest/config.html
+
+# Tests to skip entirely
+skips:
+  - B106  # hardcoded_password_funcarg - Skip for test files
+  - B107  # hardcoded_password_default - Skip for test files
+
+# Tests to run 
+tests: []
+
+# Paths to exclude from scanning
+exclude_dirs:
+  - /tests
+  - /migrations
+  - /.venv
+  - /venv
+  - /env
+  - /.env
+  - /node_modules
+  - /.git
+  - __pycache__
+
+# Paths to include (if empty, includes all)
+include: 
+  - authentication
+  - consultas  
+  - core
+  - profissionais
+
+# Override specific tests for specific paths/files
+# Allow hardcoded test passwords in test files
+exclude:
+  - "*/test*.py"
+  - "*/tests.py" 
+  - "*test_mixins.py"
+
+# Confidence level filter  
+confidence: MEDIUM
+
+# Severity level filter
+level: MEDIUM

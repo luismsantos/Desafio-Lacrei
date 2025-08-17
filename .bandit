@@ -1,0 +1,31 @@
+# Bandit configuration file
+[bandit]
+# Exclude test files from certain security checks since they contain test data
+exclude_dirs = []
+
+# Skip certain tests for test files
+skips = []
+
+# Tests to exclude globally
+exclude = []
+
+[bandit.assert_used]
+# Allow assert statements in test files
+skips = ['**/test*.py', '**/tests.py', '**/test_*.py']
+
+[bandit.hardcoded_password_string]
+# Allow hardcoded passwords in test files - they're test fixtures
+word_list = []
+
+[bandit.hardcoded_password_default]  
+# Skip hardcoded password checks in test files
+skips = ['**/test*.py', '**/tests.py', '**/test_*.py', '**/test_mixins.py']
+
+[bandit.hardcoded_password_funcarg]
+# Skip hardcoded password function argument checks in test files  
+skips = ['**/test*.py', '**/tests.py', '**/test_*.py', '**/test_mixins.py']
+
+# Confidence levels: LOW, MEDIUM, HIGH
+# Severity levels: LOW, MEDIUM, HIGH
+level = LOW
+confidence = MEDIUM
