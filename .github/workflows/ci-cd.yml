@@ -71,10 +71,13 @@ jobs:
         # Ignore CVE-2024-22513 for djangorestframework-simplejwt as it's a false positive for version 5.5.1
         poetry run safety scan --ignore 66963 || true
         
-        # Run bandit security scanner
-        poetry run bandit -r . -f json -o bandit-report.json --skip B101,B106,B107,B108,B110,B603 --exclude */migrations/*,*/venv/*,*/.venv/*,*/env/*,*/.env/*,*/node_modules/*,*/__pycache__/*,*/.git/*,*/htmlcov/*,*/.pytest_cache/* || true
-        # Display results in a readable format  
-        poetry run bandit -r . --skip B101,B106,B107,B108,B110,B603 --exclude */migrations/*,*/venv/*,*/.venv/*,*/env/*,*/.env/*,*/node_modules/*,*/__pycache__/*,*/.git/*,*/htmlcov/*,*/.pytest_cache/* || true
+        # Run bandit security scanner with explicit skips for Django patterns
+        echo "🔍 Running Bandit security scanner..."
+        poetry run bandit -r . \
+          --skip B101,B106,B107,B108,B110,B603 \
+          --exclude "*/migrations/*,*/venv/*,*/.venv/*,*/env/*,*/.env/*,*/node_modules/*,*/__pycache__/*,*/.git/*,*/htmlcov/*,*/.pytest_cache/*"
+        
+        echo "✅ Bandit security check completed successfully!"
 
   test:
     name: 🧪 Test
