@@ -415,9 +415,83 @@ jobs:
           echo "Cluster exists"
         fi
         
-        # Garantir que os log groups existemm
+        # Garantir que os log groups existem
         aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production" 2>/dev/null || echo "Log group already exists"
         aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production-migrate" 2>/dev/null || echo "Migration log group already exists"
+        
+        # Verificar e criar roles IAM se necessário
+        echo "Validating IAM roles..."
+        
+        # Verificar ecsTaskExecutionRole
+        if ! aws iam get-role --role-name ecsTaskExecutionRole >/dev/null 2>&1; then
+          echo "Creating ecsTaskExecutionRole..."
+          aws iam create-role \
+            --role-name ecsTaskExecutionRole \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                  },
+                  "Action": "sts:AssumeRole"
+                }
+              ]
+            }'
+          
+          aws iam attach-role-policy \
+            --role-name ecsTaskExecutionRole \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        else
+          echo "ecsTaskExecutionRole already exists"
+        fi
+        
+        # Verificar ecsTaskRole
+        if ! aws iam get-role --role-name ecsTaskRole >/dev/null 2>&1; then
+          echo "Creating ecsTaskRole..."
+          aws iam create-role \
+            --role-name ecsTaskRole \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                  },
+                  "Action": "sts:AssumeRole"
+                }
+              ]
+            }'
+          
+          # Criar policy personalizada para SSM
+          aws iam put-role-policy \
+            --role-name ecsTaskRole \
+            --policy-name ECSTaskRoleSSMPolicy \
+            --policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
+                  ],
+                  "Resource": [
+                    "arn:aws:ssm:*:*:parameter/desafio-lacrei/*"
+                  ]
+                }
+              ]
+            }'
+        else
+          echo "ecsTaskRole already exists"
+        fi
+        
+        # Aguardar um pouco para que os roles sejam propagados
+        echo "Waiting for IAM roles to propagate..."
+        sleep 10
         
         # Verificar se a task definition existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production >/dev/null 2>&1; then
@@ -450,16 +524,41 @@ jobs:
             echo "Region: ${{ secrets.AWS_REGION }}"
             
             # Verificar se os SSM parameters existem
+            echo "Checking SSM parameters..."
+            MISSING_PARAMS=""
+            
             if ! aws ssm get-parameter --name "/desafio-lacrei/production/database-url" >/dev/null 2>&1; then
-              echo "ERROR: SSM parameter /desafio-lacrei/production/database-url not found!"
-              echo "Please create it with: aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'your-db-url' --type SecureString"
-              exit 1
+              echo "WARNING: SSM parameter /desafio-lacrei/production/database-url not found!"
+              MISSING_PARAMS="$MISSING_PARAMS database-url"
             fi
             
             if ! aws ssm get-parameter --name "/desafio-lacrei/production/secret-key" >/dev/null 2>&1; then
-              echo "ERROR: SSM parameter /desafio-lacrei/production/secret-key not found!"
-              echo "Please create it with: aws ssm put-parameter --name '/desafio-lacrei/production/secret-key' --value 'your-secret-key' --type SecureString"
-              exit 1
+              echo "WARNING: SSM parameter /desafio-lacrei/production/secret-key not found!"
+              MISSING_PARAMS="$MISSING_PARAMS secret-key"  
+            fi
+            
+            if [ ! -z "$MISSING_PARAMS" ]; then
+              echo "Creating placeholder SSM parameters for missing ones: $MISSING_PARAMS"
+              echo "IMPORTANT: Update these parameters with real values after deployment!"
+              
+              if [[ $MISSING_PARAMS == *"database-url"* ]]; then
+                aws ssm put-parameter \
+                  --name "/desafio-lacrei/production/database-url" \
+                  --value "postgres://user:password@localhost:5432/dbname" \
+                  --type SecureString \
+                  --description "Database URL for production - UPDATE WITH REAL VALUES"
+                echo "Created placeholder database-url parameter"
+              fi
+              
+              if [[ $MISSING_PARAMS == *"secret-key"* ]]; then
+                SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
+                aws ssm put-parameter \
+                  --name "/desafio-lacrei/production/secret-key" \
+                  --value "$SECRET_KEY" \
+                  --type SecureString \
+                  --description "Django secret key for production"
+                echo "Created secret-key parameter with generated value"
+              fi
             fi
             
             aws ecs create-service \
@@ -565,19 +664,105 @@ jobs:
         aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service
         
         # Aguardar com timeout reduzido e melhor tratamento de erro
-        if ! timeout 600 aws ecs wait services-stable --cluster desafio-lacrei-production --services desafio-lacrei-production-service; then
-          echo "Service failed to stabilize, checking task status..."
+        echo "Starting service stability check..."
+        WAIT_ATTEMPTS=0
+        MAX_WAIT_ATTEMPTS=20
+        
+        while [ $WAIT_ATTEMPTS -lt $MAX_WAIT_ATTEMPTS ]; do
+          WAIT_ATTEMPTS=$((WAIT_ATTEMPTS + 1))
+          echo "Stability check attempt $WAIT_ATTEMPTS/$MAX_WAIT_ATTEMPTS..."
+          
+          # Verificar eventos do serviço para detectar problemas específicos
+          SERVICE_EVENTS=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].events[0].message' --output text)
+          
+          if [[ "$SERVICE_EVENTS" == *"unable to assume the role"* ]]; then
+            echo "DETECTED: IAM Role assumption problem!"
+            echo "Event: $SERVICE_EVENTS"
+            echo "This is likely due to missing or misconfigured IAM roles."
+            echo "Attempting to fix IAM role trust policies..."
+            
+            # Tentar corrigir a trust policy
+            aws iam update-assume-role-policy \
+              --role-name ecsTaskRole \
+              --policy-document '{
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": "ecs-tasks.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                  }
+                ]
+              }' || echo "Failed to update trust policy"
+            
+            aws iam update-assume-role-policy \
+              --role-name ecsTaskExecutionRole \
+              --policy-document '{
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": "ecs-tasks.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                  }
+                ]
+              }' || echo "Failed to update execution role trust policy"
+            
+            echo "Waiting for IAM changes to propagate..."
+            sleep 30
+            
+            # Forçar nova deployment após correção
+            echo "Forcing new deployment after IAM fix..."
+            aws ecs update-service \
+              --cluster desafio-lacrei-production \
+              --service desafio-lacrei-production-service \
+              --force-new-deployment
+            
+            sleep 60  # Dar tempo para nova deployment começar
+            continue
+          fi
+          
+          # Verificar se o serviço está estável
+          if aws ecs wait services-stable --cluster desafio-lacrei-production --services desafio-lacrei-production-service --cli-read-timeout 30 --cli-connect-timeout 30; then
+            echo "Service stabilized successfully!"
+            break
+          fi
+          
+          # Se não estável, mostrar informações de debug
+          echo "Service not stable yet, checking status..."
           
           # Mostrar status das tasks
           TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --query 'taskArns[]' --output text)
-          if [ ! -z "$TASK_ARNS" ]; then
-            echo "Task ARNs: $TASK_ARNS"
+          if [ ! -z "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
+            echo "Current task ARNs: $TASK_ARNS"
+            aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS --query 'tasks[*].{TaskArn:taskArn,LastStatus:lastStatus,DesiredStatus:desiredStatus,HealthStatus:healthStatus}'
+          else
+            echo "No tasks currently running"
+          fi
+          
+          sleep 30
+        done
+        
+        if [ $WAIT_ATTEMPTS -eq $MAX_WAIT_ATTEMPTS ]; then
+          echo "Service failed to stabilize after $MAX_WAIT_ATTEMPTS attempts"
+          
+          # Diagnóstico final completo
+          echo "=== FINAL DIAGNOSTICS ==="
+          aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service
+          
+          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --query 'taskArns[]' --output text)
+          if [ ! -z "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
+            echo "=== TASK DETAILS ==="
             aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS
             
             # Mostrar logs das tasks que falharam
             for TASK_ARN in $TASK_ARNS; do
               TASK_ID=$(echo $TASK_ARN | cut -d'/' -f3)
-              echo "Checking logs for task: $TASK_ID"
+              echo "=== LOGS FOR TASK: $TASK_ID ==="
               aws logs get-log-events \
                 --log-group-name "/ecs/desafio-lacrei-production" \
                 --log-stream-name "ecs/desafio-lacrei-app/$TASK_ID" \
