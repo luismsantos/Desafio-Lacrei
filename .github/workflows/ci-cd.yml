@@ -687,8 +687,8 @@ jobs:
           
           echo "Desired count: $DESIRED_COUNT, Pending count: $PENDING_COUNT"
           
-          # Se não há tasks desejadas nem pendentes após algumas tentativas, isso indica problema na task definition ou IAM
-          if [ "$DESIRED_COUNT" = "0" ] && [ "$PENDING_COUNT" = "0" ] && [ "$RUNNING_COUNT" = "0" ] && [ $WAIT_ATTEMPTS -gt 2 ]; then
+          # Se não há tasks desejadas nem pendentes, isso indica problema na task definition ou IAM - CORREÇÃO IMEDIATA
+          if [ "$DESIRED_COUNT" = "0" ] && [ "$PENDING_COUNT" = "0" ] && [ "$RUNNING_COUNT" = "0" ]; then
             echo "=== DETECTED: NO TASKS BEING CREATED (desiredCount=0) ==="
             echo "This usually indicates IAM role or task definition issues"
             
@@ -766,8 +766,8 @@ jobs:
             continue
           fi
           
-          # Se temos muitas tasks falhadas e nenhuma rodando, corrigir SSM imediatamente
-          if [ "$FAILED_TASKS_COUNT" -gt 3 ] && [ "$RUNNING_COUNT" = "0" ] && [ $WAIT_ATTEMPTS -gt 2 ]; then
+          # Se temos tasks falhadas e nenhuma rodando, corrigir SSM imediatamente
+          if [ "$FAILED_TASKS_COUNT" -gt 0 ] && [ "$RUNNING_COUNT" = "0" ]; then
             echo "=== DETECTED REPEATED TASK FAILURES - IMMEDIATE SSM FIX ==="
             
             # Corrigir parâmetros SSM imediatamente
