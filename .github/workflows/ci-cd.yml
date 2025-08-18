@@ -71,13 +71,10 @@ jobs:
         # Ignore CVE-2024-22513 for djangorestframework-simplejwt as it's a false positive for version 5.5.1
         poetry run safety scan --ignore 66963 || true
         
-        # Run bandit security scanner with explicit skips for Django patterns
-        echo "🔍 Running Bandit security scanner..."
-        poetry run bandit -r . \
-          --skip B101,B106,B107,B108,B110,B603 \
-          --exclude "*/migrations/*,*/venv/*,*/.venv/*,*/env/*,*/.env/*,*/node_modules/*,*/__pycache__/*,*/.git/*,*/htmlcov/*,*/.pytest_cache/*"
-        
-        echo "✅ Bandit security check completed successfully!"
+        # Run bandit security scanner
+        poetry run bandit -r . -f json -o bandit-report.json --skip B101,B106,B107,B108,B110,B603 --exclude */migrations/*,*/venv/*,*/.venv/*,*/env/*,*/.env/*,*/node_modules/*,*/__pycache__/*,*/.git/*,*/htmlcov/*,*/.pytest_cache/* || true
+        # Display results in a readable format  
+        poetry run bandit -r . --skip B101,B106,B107,B108,B110,B603 --exclude */migrations/*,*/venv/*,*/.venv/*,*/env/*,*/.env/*,*/node_modules/*,*/__pycache__/*,*/.git/*,*/htmlcov/*,*/.pytest_cache/* || true
 
   test:
     name: 🧪 Test
@@ -687,31 +684,28 @@ jobs:
             echo "This usually indicates IAM role or task definition issues"
             
             # Primeiro, corrigir parâmetros SSM que podem estar causando falhas na task definition
-            echo "Preemptively fixing SSM parameters..."
+            echo "Checking production SSM parameters..."
             DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
             if [[ "$DB_URL" == *"localhost"* ]] || [[ "$DB_URL" == *"user:password"* ]] || [ -z "$DB_URL" ] || [[ "$DB_URL" == "None" ]]; then
-              echo "Fixing database URL..."
-              aws ssm put-parameter \
-                --name "/desafio-lacrei/production/database-url" \
-                --value "sqlite:////tmp/db/db.sqlite3" \
-                --type SecureString \
-                --overwrite \
-                --description "SQLite fallback - no tasks were being created"
-              echo "✅ Database URL set to SQLite"
+              echo "❌ ERROR: Production DATABASE_URL is missing or invalid!"
+              echo "Database URL: $DB_URL"
+              echo "Production requires a valid PostgreSQL connection string."
+              echo "Please configure: aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'postgres://user:pass@host:5432/dbname' --type SecureString"
+              exit 1
             fi
             
-            # Verificar e corrigir secret key também
+            # Verificar secret key de produção também
             SECRET_KEY=$(aws ssm get-parameter --name "/desafio-lacrei/production/secret-key" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
             if [ ${#SECRET_KEY} -lt 20 ]; then
-              echo "Generating new secret key..."
+              echo "Generating production secret key..."
               NEW_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
               aws ssm put-parameter \
                 --name "/desafio-lacrei/production/secret-key" \
                 --value "$NEW_SECRET" \
                 --type SecureString \
                 --overwrite \
-                --description "Generated secret key - no tasks were being created"
-              echo "✅ Secret key generated"
+                --description "Generated secret key for production"
+              echo "✅ Production secret key generated"
             fi
             
             # Tentar corrigir trust policies dos roles IAM
@@ -764,17 +758,15 @@ jobs:
           if [ "$FAILED_TASKS_COUNT" -gt 0 ] && [ "$RUNNING_COUNT" = "0" ]; then
             echo "=== DETECTED REPEATED TASK FAILURES - IMMEDIATE SSM FIX ==="
             
-            # Corrigir parâmetros SSM imediatamente
+            # Verificar parâmetros SSM de produção imediatamente
             DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
             if [[ "$DB_URL" == *"localhost"* ]] || [[ "$DB_URL" == *"user:password"* ]] || [ -z "$DB_URL" ]; then
-              echo "Fixing placeholder database URL immediately..."
-              aws ssm put-parameter \
-                --name "/desafio-lacrei/production/database-url" \
-                --value "sqlite:////tmp/db/db.sqlite3" \
-                --type SecureString \
-                --overwrite \
-                --description "SQLite fallback for production testing"
-              echo "✅ Database URL fixed to SQLite"
+              echo "❌ ERROR: Production DATABASE_URL is missing or contains placeholder values!"
+              echo "Current DATABASE_URL: $DB_URL"
+              echo "Production environment requires a valid PostgreSQL connection string."
+              echo "Please configure the production database parameter:"
+              echo "aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'postgres://user:pass@host:5432/dbname' --type SecureString"
+              exit 1
               
               # Forçar nova deployment
               echo "Forcing immediate deployment with fixed parameters..."
@@ -948,17 +940,15 @@ jobs:
               if [ $WAIT_ATTEMPTS -gt 5 ]; then
                 echo "=== ATTEMPTING TO FIX SSM PARAMETERS ==="
                 
-                # Verificar se os parâmetros são placeholders
+                # Verificar se os parâmetros de produção são válidos
                 DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-                if [[ "$DB_URL" == *"localhost"* ]] || [[ "$DB_URL" == *"user:password"* ]]; then
-                  echo "Detected placeholder database URL, creating SQLite fallback..."
-                  aws ssm put-parameter \
-                    --name "/desafio-lacrei/production/database-url" \
-                    --value "sqlite:////tmp/db/db.sqlite3" \
-                    --type SecureString \
-                    --overwrite \
-                    --description "Fallback SQLite database for production testing"
-                  echo "Updated database URL to SQLite fallback"
+                if [[ "$DB_URL" == *"localhost"* ]] || [[ "$DB_URL" == *"user:password"* ]] || [ -z "$DB_URL" ]; then
+                  echo "❌ PRODUCTION DATABASE ERROR: Invalid or missing DATABASE_URL!"
+                  echo "Current value: $DB_URL"
+                  echo "Production deployment failed due to missing PostgreSQL configuration."
+                  echo "Required action: Configure production database with:"
+                  echo "aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'postgres://user:pass@host:5432/dbname' --type SecureString"
+                  exit 1
                   
                   # Forçar nova deployment
                   echo "Forcing new deployment with corrected parameters..."
@@ -1052,41 +1042,41 @@ jobs:
     
     - name: Run production migrations
       run: |
-        # Verificar se o parâmetro DATABASE_URL existe e criar PostgreSQL RDS se necessário
+        # Verificar se o parâmetro DATABASE_URL existe para produção
         echo "Checking DATABASE_URL configuration for production..."
         
-        # Verificar se já existe um DATABASE_URL configurado
+        # Verificar se já existe um DATABASE_URL configurado para produção
         if ! aws ssm get-parameter --name "/desafio-lacrei/production/database-url" >/dev/null 2>&1; then
-          echo "DATABASE_URL parameter not found. You need to configure a PostgreSQL database."
-          echo "Options:"
-          echo "1. Create an RDS PostgreSQL instance"
-          echo "2. Set the DATABASE_URL parameter manually with:"
-          echo "   aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'postgres://user:pass@host:5432/dbname' --type SecureString"
+          echo "❌ ERROR: DATABASE_URL parameter not found for production!"
+          echo "You must configure a PostgreSQL database for production."
           echo ""
-          echo "For now, using SQLite as fallback..."
-          aws ssm put-parameter \
-            --name "/desafio-lacrei/production/database-url" \
-            --value "sqlite:////tmp/db/db.sqlite3" \
-            --type SecureString \
-            --overwrite \
-            --description "SQLite fallback - PLEASE CONFIGURE POSTGRESQL RDS"
+          echo "To configure the database, run:"
+          echo "aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'postgres://user:pass@host:5432/dbname' --type SecureString"
+          echo ""
+          echo "For production, we require PostgreSQL. SQLite is not suitable for production use."
+          exit 1
         else
           DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text)
           if [[ "$DB_URL" == *"sqlite"* ]]; then
-            echo "⚠️  WARNING: Still using SQLite in production!"
-            echo "Consider setting up PostgreSQL RDS for production use."
+            echo "❌ ERROR: SQLite detected in production DATABASE_URL!"
+            echo "Production requires PostgreSQL database. Please configure a proper PostgreSQL connection."
+            echo "Current DATABASE_URL starts with: ${DB_URL%%:*}://"
+            exit 1
+          elif [[ "$DB_URL" == *"postgres"* ]]; then
+            echo "✅ Using PostgreSQL database for production: ${DB_URL%%:*}://..."
           else
-            echo "✅ Using configured database: ${DB_URL%%:*}://..."
+            echo "⚠️  WARNING: Unexpected database type detected: ${DB_URL%%:*}://"
+            echo "Production is configured to use PostgreSQL. Proceeding with migration..."
           fi
         fi
         
         # Verificar se a task definition de migração existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
-          echo "Migration task definition exists, updating with proper SQLite setup..."
+          echo "Migration task definition exists, updating with PostgreSQL configuration..."
           IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
           echo "Using image for production migration update: $IMAGE_TAG"
           
-          # Create task definition for migrations using configured database
+          # Create task definition for migrations using PostgreSQL database
           aws ecs register-task-definition \
             --family desafio-lacrei-production-migrate \
             --network-mode awsvpc \
