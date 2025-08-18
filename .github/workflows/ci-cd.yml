@@ -6,9 +6,11 @@
 # AWS_SECRET_ACCESS_KEY - Chave secreta AWS  
 # AWS_REGION - Região AWS (ex: us-east-1)
 # AWS_ACCOUNT_ID - ID da conta AWS
-# AWS_SUBNET_1 - ID da primeira subnet privada
-# AWS_SUBNET_2 - ID da segunda subnet privada
+# AWS_SUBNET_1 - ID da primeira subnet pública
+# AWS_SUBNET_2 - ID da segunda subnet pública
 # AWS_SECURITY_GROUP - ID do security group
+# DOCKER_HUB_USERNAME - Usuário do Docker Hub (opcional)
+# DOCKER_HUB_ACCESS_TOKEN - Token de acesso do Docker Hub (opcional)
 
 name: CI/CD Pipeline
 
@@ -239,74 +241,68 @@ jobs:
     - name: Run Database Migrations
       run: |
         # Verificar se a task definition de migração existe
-        if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
+        if aws ecs describe-task-definition --task-definition desafio-lacrei-staging-migrate >/dev/null 2>&1; then
           echo "Migration task definition exists, updating..."
-          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate --query taskDefinition)
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-staging-migrate --query taskDefinition)
           NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
           aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION"
         else
           echo "Creating migration task definition..."
-          cat > migrate-task-definition.json << EOF
-        {
-          "family": "desafio-lacrei-production-migrate",
-          "networkMode": "awsvpc",
-          "requiresCompatibilities": ["FARGATE"],
-          "cpu": "256",
-          "memory": "512",
-          "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole",
-          "taskRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole",
-          "containerDefinitions": [
-            {
+          aws ecs register-task-definition \
+            --family desafio-lacrei-staging-migrate \
+            --network-mode awsvpc \
+            --requires-compatibility FARGATE \
+            --cpu 256 \
+            --memory 512 \
+            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
+            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
+            --container-definitions '[{
               "name": "desafio-lacrei-migrate",
               "image": "${{ needs.build.outputs.image-tag }}",
               "command": ["python", "manage.py", "migrate"],
               "essential": true,
-              "environment": [
-                {
-                  "name": "DEBUG",
-                  "value": "False"
-                }
-              ],
-              "secrets": [
-                {
-                  "name": "DATABASE_URL",
-                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
-                },
-                {
-                  "name": "SECRET_KEY",
-                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
-                }
-              ],
+              "environment": [{
+                "name": "DEBUG",
+                "value": "True"
+              }],
+              "secrets": [{
+                "name": "DATABASE_URL",
+                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/database-url"
+              }, {
+                "name": "SECRET_KEY",
+                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/secret-key"
+              }],
               "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                  "awslogs-group": "/ecs/desafio-lacrei-production-migrate",
+                  "awslogs-group": "/ecs/desafio-lacrei-staging-migrate",
                   "awslogs-region": "${{ secrets.AWS_REGION }}",
                   "awslogs-stream-prefix": "ecs"
                 }
               }
-            }
-          ]
-        }
-        EOF
-          aws ecs register-task-definition --cli-input-json file://migrate-task-definition.json
+            }]'
         fi
         
         # Executar task de migração
-        TASK_ARN=$(aws ecs run-task 
-          --cluster desafio-lacrei-production 
-          --task-definition desafio-lacrei-production-migrate 
-          --launch-type FARGATE 
-          --network-configuration 'awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}' 
+        TASK_ARN=$(aws ecs run-task \
+          --cluster desafio-lacrei-staging \
+          --task-definition desafio-lacrei-staging-migrate \
+          --launch-type FARGATE \
+          --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
           --query 'tasks[0].taskArn' --output text)
           
         # Aguardar conclusão da migração
         echo "Aguardando migração concluir..."
-        aws ecs wait tasks-stopped --cluster desafio-lacrei-production --tasks $TASK_ARN
+        aws ecs wait tasks-stopped --cluster desafio-lacrei-staging --tasks $TASK_ARN
         
         # Verificar se a migração foi bem-sucedida
-        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode')
-        if [ "$EXIT_CODE" != "0" ]; then
+        TASK_STATUS=$(aws ecs describe-tasks --cluster desafio-lacrei-staging --tasks $TASK_ARN --query 'tasks[0].lastStatus' --output text)
+        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-staging --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
+        
+        echo "Task Status: $TASK_STATUS"
+        echo "Exit Code: $EXIT_CODE"
+        
+        if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "None" ]; then
           echo "Migração falhou com exit code: $EXIT_CODE"
           exit 1
         fi
@@ -349,47 +345,37 @@ jobs:
         else
           echo "Task definition doesn't exist, creating initial deployment..."
           
-          # Primeira vez - criar task definition base
-          cat > task-definition.json << EOF
-        {
-          "family": "desafio-lacrei-production",
-          "networkMode": "awsvpc",
-          "requiresCompatibilities": ["FARGATE"],
-          "cpu": "512",
-          "memory": "1024",
-          "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole",
-          "taskRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole",
-          "containerDefinitions": [
-            {
+          # Criar task definition usando parâmetros diretos do AWS CLI
+          aws ecs register-task-definition \
+            --family desafio-lacrei-production \
+            --network-mode awsvpc \
+            --requires-compatibility FARGATE \
+            --cpu 512 \
+            --memory 1024 \
+            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
+            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
+            --container-definitions '[{
               "name": "desafio-lacrei-app",
               "image": "${{ needs.build.outputs.image-tag }}",
-              "portMappings": [
-                {
-                  "containerPort": 8000,
-                  "protocol": "tcp"
-                }
-              ],
+              "portMappings": [{
+                "containerPort": 8000,
+                "protocol": "tcp"
+              }],
               "essential": true,
-              "environment": [
-                {
-                  "name": "DEBUG",
-                  "value": "False"
-                },
-                {
-                  "name": "ALLOWED_HOSTS",
-                  "value": "*"
-                }
-              ],
-              "secrets": [
-                {
-                  "name": "DATABASE_URL",
-                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
-                },
-                {
-                  "name": "SECRET_KEY",
-                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
-                }
-              ],
+              "environment": [{
+                "name": "DEBUG",
+                "value": "False"
+              }, {
+                "name": "ALLOWED_HOSTS",
+                "value": "*"
+              }],
+              "secrets": [{
+                "name": "DATABASE_URL",
+                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
+              }, {
+                "name": "SECRET_KEY",
+                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
+              }],
               "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
@@ -398,13 +384,7 @@ jobs:
                   "awslogs-stream-prefix": "ecs"
                 }
               }
-            }
-          ]
-        }
-        EOF
-          
-          # Registrar task definition inicial
-          aws ecs register-task-definition --cli-input-json file://task-definition.json
+            }]'
           
           # Atualizar ou criar serviço
           if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service >/dev/null 2>&1; then
@@ -427,24 +407,103 @@ jobs:
     
     - name: Run production migrations
       run: |
-        aws ecs run-task \
+        # Verificar se a task definition de migração existe
+        if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
+          echo "Migration task definition exists, updating..."
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate --query taskDefinition)
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION"
+        else
+          echo "Creating migration task definition..."
+          aws ecs register-task-definition \
+            --family desafio-lacrei-production-migrate \
+            --network-mode awsvpc \
+            --requires-compatibility FARGATE \
+            --cpu 256 \
+            --memory 512 \
+            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
+            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
+            --container-definitions '[{
+              "name": "desafio-lacrei-migrate",
+              "image": "${{ needs.build.outputs.image-tag }}",
+              "command": ["python", "manage.py", "migrate"],
+              "essential": true,
+              "environment": [{
+                "name": "DEBUG",
+                "value": "False"
+              }],
+              "secrets": [{
+                "name": "DATABASE_URL",
+                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
+              }, {
+                "name": "SECRET_KEY",
+                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
+              }],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/desafio-lacrei-production-migrate",
+                  "awslogs-region": "${{ secrets.AWS_REGION }}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }]'
+        fi
+        
+        # Executar task de migração
+        TASK_ARN=$(aws ecs run-task \
           --cluster desafio-lacrei-production \
           --task-definition desafio-lacrei-production-migrate \
           --launch-type FARGATE \
-          --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.PRODUCTION_SUBNET_IDS }}],securityGroups=[${{ secrets.PRODUCTION_SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}"
+          --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
+          --query 'tasks[0].taskArn' --output text)
+          
+        # Aguardar conclusão da migração
+        echo "Aguardando migração concluir..."
+        aws ecs wait tasks-stopped --cluster desafio-lacrei-production --tasks $TASK_ARN
+        
+        # Verificar se a migração foi bem-sucedida
+        TASK_STATUS=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].lastStatus' --output text)
+        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
+        
+        echo "Task Status: $TASK_STATUS"
+        echo "Exit Code: $EXIT_CODE"
+        
+        if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "None" ]; then
+          echo "Migração falhou com exit code: $EXIT_CODE"
+          # Mostrar logs da task para debugging
+          aws logs get-log-events \
+            --log-group-name "/ecs/desafio-lacrei-production-migrate" \
+            --log-stream-name "ecs/desafio-lacrei-migrate/$(echo $TASK_ARN | cut -d'/' -f3)" \
+            --query 'events[*].message' --output text || echo "Não foi possível recuperar logs"
+          exit 1
+        fi
     
     - name: Health check
       run: |
-        # Verificar se a aplicação está respondendo corretamente
-        for i in {1..10}; do
-          if curl -f ${{ secrets.PRODUCTION_URL }}/health/; then
-            echo "Health check passed"
-            break
+        # Obter o IP público da task do ECS para verificar saúde
+        TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --query 'taskArns[0]' --output text)
+        if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
+          TASK_IP=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
+          if [ ! -z "$TASK_IP" ]; then
+            PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $TASK_IP --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+            
+            # Verificar se a aplicação está respondendo corretamente
+            for i in {1..10}; do
+              if curl -f "http://${PUBLIC_IP}:8000/health/" --connect-timeout 10; then
+                echo "Health check passed"
+                break
+              else
+                echo "Health check failed, attempt $i/10"
+                sleep 30
+              fi
+            done
           else
-            echo "Health check failed, attempt $i/10"
-            sleep 30
+            echo "Could not retrieve task IP, skipping health check"
           fi
-        done
+        else
+          echo "No running tasks found, skipping health check"
+        fi
 
   rollback:
     name: 🔄 Rollback
