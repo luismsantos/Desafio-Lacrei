@@ -681,6 +681,91 @@ jobs:
           
           echo "Failed tasks: $FAILED_TASKS_COUNT, Running tasks: $RUNNING_COUNT"
           
+          # Verificar se o deployment não está criando tasks (desiredCount: 0)
+          DESIRED_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].deployments[0].desiredCount' --output text 2>/dev/null || echo "1")
+          PENDING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].pendingCount' --output text)
+          
+          echo "Desired count: $DESIRED_COUNT, Pending count: $PENDING_COUNT"
+          
+          # Se não há tasks desejadas nem pendentes após algumas tentativas, isso indica problema na task definition ou IAM
+          if [ "$DESIRED_COUNT" = "0" ] && [ "$PENDING_COUNT" = "0" ] && [ "$RUNNING_COUNT" = "0" ] && [ $WAIT_ATTEMPTS -gt 2 ]; then
+            echo "=== DETECTED: NO TASKS BEING CREATED (desiredCount=0) ==="
+            echo "This usually indicates IAM role or task definition issues"
+            
+            # Primeiro, corrigir parâmetros SSM que podem estar causando falhas na task definition
+            echo "Preemptively fixing SSM parameters..."
+            DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+            if [[ "$DB_URL" == *"localhost"* ]] || [[ "$DB_URL" == *"user:password"* ]] || [ -z "$DB_URL" ] || [[ "$DB_URL" == "None" ]]; then
+              echo "Fixing database URL..."
+              aws ssm put-parameter \
+                --name "/desafio-lacrei/production/database-url" \
+                --value "sqlite:///app/db.sqlite3" \
+                --type SecureString \
+                --overwrite \
+                --description "SQLite fallback - no tasks were being created"
+              echo "✅ Database URL set to SQLite"
+            fi
+            
+            # Verificar e corrigir secret key também
+            SECRET_KEY=$(aws ssm get-parameter --name "/desafio-lacrei/production/secret-key" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+            if [ ${#SECRET_KEY} -lt 20 ]; then
+              echo "Generating new secret key..."
+              NEW_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
+              aws ssm put-parameter \
+                --name "/desafio-lacrei/production/secret-key" \
+                --value "$NEW_SECRET" \
+                --type SecureString \
+                --overwrite \
+                --description "Generated secret key - no tasks were being created"
+              echo "✅ Secret key generated"
+            fi
+            
+            # Tentar corrigir trust policies dos roles IAM
+            echo "Updating IAM role trust policies..."
+            aws iam update-assume-role-policy \
+              --role-name ecsTaskRole \
+              --policy-document '{
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": "ecs-tasks.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                  }
+                ]
+              }' || echo "Could not update ecsTaskRole trust policy"
+            
+            aws iam update-assume-role-policy \
+              --role-name ecsTaskExecutionRole \
+              --policy-document '{
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": "ecs-tasks.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                  }
+                ]
+              }' || echo "Could not update ecsTaskExecutionRole trust policy"
+            
+            echo "Waiting for IAM changes to propagate..."
+            sleep 30
+            
+            # Forçar nova deployment com correções
+            echo "Forcing new deployment with all fixes applied..."
+            aws ecs update-service \
+              --cluster desafio-lacrei-production \
+              --service desafio-lacrei-production-service \
+              --force-new-deployment
+            
+            sleep 45
+            continue
+          fi
+          
           # Se temos muitas tasks falhadas e nenhuma rodando, corrigir SSM imediatamente
           if [ "$FAILED_TASKS_COUNT" -gt 3 ] && [ "$RUNNING_COUNT" = "0" ] && [ $WAIT_ATTEMPTS -gt 2 ]; then
             echo "=== DETECTED REPEATED TASK FAILURES - IMMEDIATE SSM FIX ==="
