@@ -190,9 +190,10 @@ jobs:
       with:
         images: ghcr.io/${{ github.repository_owner }}/desafio-lacrei
         tags: |
-          type=ref,event=branch
-          type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=Desafio Lacrei
+          org.opencontainers.image.description=Django REST API for Lacrei Challenge
     
     - name: Build and push Docker image
       id: build
@@ -243,11 +244,19 @@ jobs:
         # Verificar se a task definition de migração existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-staging-migrate >/dev/null 2>&1; then
           echo "Migration task definition exists, updating..."
+          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          echo "Using image for staging migration update: $IMAGE_TAG"
+          
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-staging-migrate --query taskDefinition)
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
           aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION"
         else
           echo "Creating migration task definition..."
+          
+          # Extrair apenas a primeira imagem da lista de tags
+          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          echo "Using image for staging migration: $IMAGE_TAG"
+          
           aws ecs register-task-definition \
             --family desafio-lacrei-staging-migrate \
             --network-mode awsvpc \
@@ -256,31 +265,31 @@ jobs:
             --memory 512 \
             --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
             --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
-            --container-definitions '[{
-              "name": "desafio-lacrei-migrate",
-              "image": "${{ needs.build.outputs.image-tag }}",
-              "command": ["python", "manage.py", "migrate"],
-              "essential": true,
-              "environment": [{
-                "name": "DEBUG",
-                "value": "True"
+            --container-definitions "[{
+              \"name\": \"desafio-lacrei-migrate\",
+              \"image\": \"$IMAGE_TAG\",
+              \"command\": [\"python\", \"manage.py\", \"migrate\"],
+              \"essential\": true,
+              \"environment\": [{
+                \"name\": \"DEBUG\",
+                \"value\": \"True\"
               }],
-              "secrets": [{
-                "name": "DATABASE_URL",
-                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/database-url"
+              \"secrets\": [{
+                \"name\": \"DATABASE_URL\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/database-url\"
               }, {
-                "name": "SECRET_KEY",
-                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/secret-key"
+                \"name\": \"SECRET_KEY\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/secret-key\"
               }],
-              "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                  "awslogs-group": "/ecs/desafio-lacrei-staging-migrate",
-                  "awslogs-region": "${{ secrets.AWS_REGION }}",
-                  "awslogs-stream-prefix": "ecs"
+              \"logConfiguration\": {
+                \"logDriver\": \"awslogs\",
+                \"options\": {
+                  \"awslogs-group\": \"/ecs/desafio-lacrei-staging-migrate\",
+                  \"awslogs-region\": \"${{ secrets.AWS_REGION }}\",
+                  \"awslogs-stream-prefix\": \"ecs\"
                 }
               }
-            }]'
+            }]"
         fi
         
         # Executar task de migração
@@ -332,8 +341,11 @@ jobs:
           echo "Task definition exists, implementing Blue/Green deployment..."
           
           # Blue/Green Deploy - Atualizar task definition existente
+          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          echo "Using image for Blue/Green update: $IMAGE_TAG"
+          
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
           NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
           NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
           
@@ -345,6 +357,10 @@ jobs:
         else
           echo "Task definition doesn't exist, creating initial deployment..."
           
+          # Extrair apenas a primeira imagem da lista de tags
+          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          echo "Using image: $IMAGE_TAG"
+          
           # Criar task definition usando parâmetros diretos do AWS CLI
           aws ecs register-task-definition \
             --family desafio-lacrei-production \
@@ -354,37 +370,37 @@ jobs:
             --memory 1024 \
             --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
             --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
-            --container-definitions '[{
-              "name": "desafio-lacrei-app",
-              "image": "${{ needs.build.outputs.image-tag }}",
-              "portMappings": [{
-                "containerPort": 8000,
-                "protocol": "tcp"
+            --container-definitions "[{
+              \"name\": \"desafio-lacrei-app\",
+              \"image\": \"$IMAGE_TAG\",
+              \"portMappings\": [{
+                \"containerPort\": 8000,
+                \"protocol\": \"tcp\"
               }],
-              "essential": true,
-              "environment": [{
-                "name": "DEBUG",
-                "value": "False"
+              \"essential\": true,
+              \"environment\": [{
+                \"name\": \"DEBUG\",
+                \"value\": \"False\"
               }, {
-                "name": "ALLOWED_HOSTS",
-                "value": "*"
+                \"name\": \"ALLOWED_HOSTS\",
+                \"value\": \"*\"
               }],
-              "secrets": [{
-                "name": "DATABASE_URL",
-                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
+              \"secrets\": [{
+                \"name\": \"DATABASE_URL\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
               }, {
-                "name": "SECRET_KEY",
-                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
+                \"name\": \"SECRET_KEY\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
               }],
-              "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                  "awslogs-group": "/ecs/desafio-lacrei-production",
-                  "awslogs-region": "${{ secrets.AWS_REGION }}",
-                  "awslogs-stream-prefix": "ecs"
+              \"logConfiguration\": {
+                \"logDriver\": \"awslogs\",
+                \"options\": {
+                  \"awslogs-group\": \"/ecs/desafio-lacrei-production\",
+                  \"awslogs-region\": \"${{ secrets.AWS_REGION }}\",
+                  \"awslogs-stream-prefix\": \"ecs\"
                 }
               }
-            }]'
+            }]"
           
           # Atualizar ou criar serviço
           if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service >/dev/null 2>&1; then
@@ -410,11 +426,19 @@ jobs:
         # Verificar se a task definition de migração existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
           echo "Migration task definition exists, updating..."
+          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          echo "Using image for production migration update: $IMAGE_TAG"
+          
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate --query taskDefinition)
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
           aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION"
         else
           echo "Creating migration task definition..."
+          
+          # Extrair apenas a primeira imagem da lista de tags
+          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          echo "Using image for migration: $IMAGE_TAG"
+          
           aws ecs register-task-definition \
             --family desafio-lacrei-production-migrate \
             --network-mode awsvpc \
@@ -423,31 +447,31 @@ jobs:
             --memory 512 \
             --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
             --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
-            --container-definitions '[{
-              "name": "desafio-lacrei-migrate",
-              "image": "${{ needs.build.outputs.image-tag }}",
-              "command": ["python", "manage.py", "migrate"],
-              "essential": true,
-              "environment": [{
-                "name": "DEBUG",
-                "value": "False"
+            --container-definitions "[{
+              \"name\": \"desafio-lacrei-migrate\",
+              \"image\": \"$IMAGE_TAG\",
+              \"command\": [\"python\", \"manage.py\", \"migrate\"],
+              \"essential\": true,
+              \"environment\": [{
+                \"name\": \"DEBUG\",
+                \"value\": \"False\"
               }],
-              "secrets": [{
-                "name": "DATABASE_URL",
-                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
+              \"secrets\": [{
+                \"name\": \"DATABASE_URL\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
               }, {
-                "name": "SECRET_KEY",
-                "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
+                \"name\": \"SECRET_KEY\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
               }],
-              "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                  "awslogs-group": "/ecs/desafio-lacrei-production-migrate",
-                  "awslogs-region": "${{ secrets.AWS_REGION }}",
-                  "awslogs-stream-prefix": "ecs"
+              \"logConfiguration\": {
+                \"logDriver\": \"awslogs\",
+                \"options\": {
+                  \"awslogs-group\": \"/ecs/desafio-lacrei-production-migrate\",
+                  \"awslogs-region\": \"${{ secrets.AWS_REGION }}\",
+                  \"awslogs-stream-prefix\": \"ecs\"
                 }
               }
-            }]'
+            }]"
         fi
         
         # Executar task de migração
