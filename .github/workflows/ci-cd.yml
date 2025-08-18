@@ -164,7 +164,7 @@ jobs:
     name: 🐳 Build
     runs-on: ubuntu-latest
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -191,6 +191,7 @@ jobs:
         images: ghcr.io/${{ github.repository_owner }}/desafio-lacrei
         tags: |
           type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=staging,enable=${{ github.ref == 'refs/heads/develop' }}
         labels: |
           org.opencontainers.image.title=Desafio Lacrei
           org.opencontainers.image.description=Django REST API for Lacrei Challenge
@@ -227,11 +228,67 @@ jobs:
     
     - name: Deploy to ECS Staging
       run: |
-        # Atualizar task definition com nova imagem
-        aws ecs update-service \
-          --cluster desafio-lacrei-staging \
-          --service desafio-lacrei-staging-service \
-          --force-new-deployment
+        # Verificar se o serviço existe, senão criar
+        if aws ecs describe-services --cluster desafio-lacrei-staging --services desafio-lacrei-staging-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-staging-service"; then
+          echo "Service exists, updating..."
+          aws ecs update-service \
+            --cluster desafio-lacrei-staging \
+            --service desafio-lacrei-staging-service \
+            --force-new-deployment
+        else
+          echo "Service doesn't exist, creating staging service..."
+          # Primeiro precisamos de uma task definition base para staging
+          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          
+          aws ecs register-task-definition \
+            --family desafio-lacrei-staging \
+            --network-mode awsvpc \
+            --requires-compatibilities FARGATE \
+            --cpu 256 \
+            --memory 512 \
+            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
+            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
+            --container-definitions "[{
+              \"name\": \"desafio-lacrei-app\",
+              \"image\": \"$IMAGE_TAG\",
+              \"portMappings\": [{
+                \"containerPort\": 8000,
+                \"protocol\": \"tcp\"
+              }],
+              \"essential\": true,
+              \"environment\": [{
+                \"name\": \"DEBUG\",
+                \"value\": \"True\"
+              }, {
+                \"name\": \"ALLOWED_HOSTS\",
+                \"value\": \"*\"
+              }],
+              \"secrets\": [{
+                \"name\": \"DATABASE_URL\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/database-url\"
+              }, {
+                \"name\": \"SECRET_KEY\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/staging/secret-key\"
+              }],
+              \"logConfiguration\": {
+                \"logDriver\": \"awslogs\",
+                \"options\": {
+                  \"awslogs-group\": \"/ecs/desafio-lacrei-staging\",
+                  \"awslogs-region\": \"${{ secrets.AWS_REGION }}\",
+                  \"awslogs-stream-prefix\": \"ecs\"
+                }
+              }
+            }]"
+          
+          aws ecs create-service \
+            --cluster desafio-lacrei-staging \
+            --service-name desafio-lacrei-staging-service \
+            --task-definition desafio-lacrei-staging \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
+            --enable-execute-command
+        fi
     
     - name: Wait for deployment
       run: |
@@ -403,15 +460,25 @@ jobs:
             }]"
           
           # Atualizar ou criar serviço
-          if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service >/dev/null 2>&1; then
+          if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-production-service"; then
+            echo "Service exists, updating..."
             aws ecs update-service \
               --cluster desafio-lacrei-production \
               --service desafio-lacrei-production-service \
               --task-definition desafio-lacrei-production \
               --force-new-deployment
           else
-            echo "Service doesn't exist. Please create the ECS service manually first."
-            exit 1
+            echo "Service doesn't exist, creating..."
+            aws ecs create-service \
+              --cluster desafio-lacrei-production \
+              --service-name desafio-lacrei-production-service \
+              --task-definition desafio-lacrei-production \
+              --desired-count 1 \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
+              --enable-execute-command
+            
+            echo "ECS service created successfully!"
           fi
         fi
     
