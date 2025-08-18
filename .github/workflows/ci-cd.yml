@@ -1072,14 +1072,11 @@ jobs:
             --container-definitions "[{
               \"name\": \"desafio-lacrei-migrate\",
               \"image\": \"$IMAGE_TAG\",
-              \"command\": [\"sh\", \"-c\", \"cd /app && mkdir -p . && touch db.sqlite3 && python manage.py migrate\"],
+              \"command\": [\"sh\", \"-c\", \"mkdir -p /tmp/db && DATABASE_URL=sqlite:////tmp/db/db.sqlite3 python manage.py migrate\"],
               \"essential\": true,
               \"environment\": [{
                 \"name\": \"DEBUG\",
                 \"value\": \"False\"
-              }, {
-                \"name\": \"DATABASE_URL\",
-                \"value\": \"sqlite:///app/db.sqlite3\"
               }],
               \"secrets\": [{
                 \"name\": \"SECRET_KEY\",
@@ -1112,14 +1109,11 @@ jobs:
             --container-definitions "[{
               \"name\": \"desafio-lacrei-migrate\",
               \"image\": \"$IMAGE_TAG\",
-              \"command\": [\"sh\", \"-c\", \"cd /app && mkdir -p . && touch db.sqlite3 && python manage.py migrate\"],
+              \"command\": [\"sh\", \"-c\", \"mkdir -p /tmp/db && DATABASE_URL=sqlite:////tmp/db/db.sqlite3 python manage.py migrate\"],
               \"essential\": true,
               \"environment\": [{
                 \"name\": \"DEBUG\",
                 \"value\": \"False\"
-              }, {
-                \"name\": \"DATABASE_URL\",
-                \"value\": \"sqlite:///app/db.sqlite3\"
               }],
               \"secrets\": [{
                 \"name\": \"SECRET_KEY\",
