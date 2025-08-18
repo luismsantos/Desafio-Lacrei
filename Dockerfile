@@ -27,26 +27,41 @@ RUN poetry export -f requirements.txt --output requirements.txt --without dev &&
 # Imagem final
 FROM python:3.11-slim AS runtime
 
-# Instalar apenas dependências de runtime
+# Instalar dependências de runtime e curl para healthcheck
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Instalar Poetry para desenvolvimento
+RUN pip install poetry==1.8.3
+
+# Configurar Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
 
 # Criar usuário não-root
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Criar ambiente virtual e instalar dependências
-ENV VIRTUAL_ENV=/app/.venv
+# Criar ambiente virtual fora do diretório de trabalho para evitar conflito com volume mount
+ENV VIRTUAL_ENV=/opt/venv
 RUN python -m venv ${VIRTUAL_ENV}
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY --from=builder /app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Dar ownership do virtual env para appuser
+RUN chown -R appuser:appuser ${VIRTUAL_ENV}
 
 # Definir diretório de trabalho
 WORKDIR /app
 
 # Copiar código da aplicação
 COPY --chown=appuser:appuser . .
+
+# Tornar o script executável
+RUN chmod +x /app/dev-entrypoint.sh
 
 # Criar diretório para logs
 RUN mkdir -p /var/log/django && chown appuser:appuser /var/log/django

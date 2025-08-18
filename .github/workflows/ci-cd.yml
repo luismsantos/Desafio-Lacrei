@@ -685,7 +685,7 @@ jobs:
               echo "Fixing database URL..."
               aws ssm put-parameter \
                 --name "/desafio-lacrei/production/database-url" \
-                --value "sqlite:///app/db.sqlite3" \
+                --value "sqlite:////tmp/db/db.sqlite3" \
                 --type SecureString \
                 --overwrite \
                 --description "SQLite fallback - no tasks were being created"
@@ -762,7 +762,7 @@ jobs:
               echo "Fixing placeholder database URL immediately..."
               aws ssm put-parameter \
                 --name "/desafio-lacrei/production/database-url" \
-                --value "sqlite:///app/db.sqlite3" \
+                --value "sqlite:////tmp/db/db.sqlite3" \
                 --type SecureString \
                 --overwrite \
                 --description "SQLite fallback for production testing"
@@ -946,7 +946,7 @@ jobs:
                   echo "Detected placeholder database URL, creating SQLite fallback..."
                   aws ssm put-parameter \
                     --name "/desafio-lacrei/production/database-url" \
-                    --value "sqlite:///app/db.sqlite3" \
+                    --value "sqlite:////tmp/db/db.sqlite3" \
                     --type SecureString \
                     --overwrite \
                     --description "Fallback SQLite database for production testing"
@@ -1048,10 +1048,10 @@ jobs:
         echo "Ensuring DATABASE_URL is set to SQLite for migrations..."
         aws ssm put-parameter \
           --name "/desafio-lacrei/production/database-url" \
-          --value "sqlite:///app/db.sqlite3" \
+          --value "sqlite:////tmp/db/db.sqlite3" \
           --type SecureString \
           --overwrite \
-          --description "SQLite fallback for production testing"
+          --description "SQLite fallback for production testing - writable location"
         echo "✅ Database URL confirmed as SQLite for migrations"
         
         # Verificar se a task definition de migração existe
