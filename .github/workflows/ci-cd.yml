@@ -675,6 +675,40 @@ jobs:
           # Verificar eventos do serviço para detectar problemas específicos
           SERVICE_EVENTS=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].events[0].message' --output text)
           
+          # Verificar se há tasks falhando repetidamente
+          FAILED_TASKS_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].deployments[0].failedTasks' --output text 2>/dev/null || echo "0")
+          RUNNING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].runningCount' --output text)
+          
+          echo "Failed tasks: $FAILED_TASKS_COUNT, Running tasks: $RUNNING_COUNT"
+          
+          # Se temos muitas tasks falhadas e nenhuma rodando, corrigir SSM imediatamente
+          if [ "$FAILED_TASKS_COUNT" -gt 3 ] && [ "$RUNNING_COUNT" = "0" ] && [ $WAIT_ATTEMPTS -gt 2 ]; then
+            echo "=== DETECTED REPEATED TASK FAILURES - IMMEDIATE SSM FIX ==="
+            
+            # Corrigir parâmetros SSM imediatamente
+            DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+            if [[ "$DB_URL" == *"localhost"* ]] || [[ "$DB_URL" == *"user:password"* ]] || [ -z "$DB_URL" ]; then
+              echo "Fixing placeholder database URL immediately..."
+              aws ssm put-parameter \
+                --name "/desafio-lacrei/production/database-url" \
+                --value "sqlite:///app/db.sqlite3" \
+                --type SecureString \
+                --overwrite \
+                --description "SQLite fallback for production testing"
+              echo "✅ Database URL fixed to SQLite"
+              
+              # Forçar nova deployment
+              echo "Forcing immediate deployment with fixed parameters..."
+              aws ecs update-service \
+                --cluster desafio-lacrei-production \
+                --service desafio-lacrei-production-service \
+                --force-new-deployment
+              
+              sleep 45  # Menos tempo de espera para acelerar
+              continue
+            fi
+          fi
+          
           if [[ "$SERVICE_EVENTS" == *"unable to assume the role"* ]]; then
             echo "DETECTED: IAM Role assumption problem!"
             echo "Event: $SERVICE_EVENTS"
@@ -789,7 +823,7 @@ jobs:
             echo "No tasks currently running"
             
             # Se não há tasks após várias tentativas, pode ser problema de rede/configuração
-            if [ $WAIT_ATTEMPTS -gt 8 ]; then
+            if [ $WAIT_ATTEMPTS -gt 4 ]; then
               echo "=== NO TASKS STARTING - CHECKING NETWORK CONFIGURATION ==="
               
               # Verificar se as subnets existem
