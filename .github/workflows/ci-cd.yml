@@ -432,11 +432,26 @@ jobs:
           NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
           NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
           
-          # Atualizar serviço com nova task definition
-          aws ecs update-service \
-            --cluster desafio-lacrei-production \
-            --service desafio-lacrei-production-service \
-            --task-definition desafio-lacrei-production:$NEW_REVISION
+          # Verificar se o serviço existe antes de atualizar
+          if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-production-service"; then
+            echo "Service exists, updating with new revision..."
+            aws ecs update-service \
+              --cluster desafio-lacrei-production \
+              --service desafio-lacrei-production-service \
+              --task-definition desafio-lacrei-production:$NEW_REVISION
+          else
+            echo "Service doesn't exist, creating with new task definition..."
+            aws ecs create-service \
+              --cluster desafio-lacrei-production \
+              --service-name desafio-lacrei-production-service \
+              --task-definition desafio-lacrei-production:$NEW_REVISION \
+              --desired-count 1 \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
+              --enable-execute-command
+            
+            echo "ECS service created successfully with revision $NEW_REVISION!"
+          fi
         else
           echo "Task definition doesn't exist, creating initial deployment..."
           
