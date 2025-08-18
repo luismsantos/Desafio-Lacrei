@@ -251,7 +251,7 @@ jobs:
           aws ecs register-task-definition \
             --family desafio-lacrei-staging-migrate \
             --network-mode awsvpc \
-            --requires-compatibility FARGATE \
+            --requires-compatibilities FARGATE \
             --cpu 256 \
             --memory 512 \
             --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
@@ -349,7 +349,7 @@ jobs:
           aws ecs register-task-definition \
             --family desafio-lacrei-production \
             --network-mode awsvpc \
-            --requires-compatibility FARGATE \
+            --requires-compatibilities FARGATE \
             --cpu 512 \
             --memory 1024 \
             --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
@@ -418,7 +418,7 @@ jobs:
           aws ecs register-task-definition \
             --family desafio-lacrei-production-migrate \
             --network-mode awsvpc \
-            --requires-compatibility FARGATE \
+            --requires-compatibilities FARGATE \
             --cpu 256 \
             --memory 512 \
             --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
