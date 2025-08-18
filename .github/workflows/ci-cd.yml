@@ -541,7 +541,7 @@ jobs:
             }]"
         fi
         
-        # Executar task de migraçãod
+        # Executar task de migração
         TASK_ARN=$(aws ecs run-task \
           --cluster desafio-lacrei-production \
           --task-definition desafio-lacrei-production-migrate \
