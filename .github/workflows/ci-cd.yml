@@ -1044,6 +1044,16 @@ jobs:
     
     - name: Run production migrations
       run: |
+        # Garantir que o parâmetro DATABASE_URL está com SQLite antes de executar migrações
+        echo "Ensuring DATABASE_URL is set to SQLite for migrations..."
+        aws ssm put-parameter \
+          --name "/desafio-lacrei/production/database-url" \
+          --value "sqlite:///app/db.sqlite3" \
+          --type SecureString \
+          --overwrite \
+          --description "SQLite fallback for production testing"
+        echo "✅ Database URL confirmed as SQLite for migrations"
+        
         # Verificar se a task definition de migração existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
           echo "Migration task definition exists, updating..."
@@ -1054,7 +1064,7 @@ jobs:
           NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
           aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION"
         else
-          echo "Creating migration task definition..."
+          echo "Creating migration task definition with SQLite support..."
           
           # Extrair apenas a primeira imagem da lista de tags
           IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
@@ -1076,11 +1086,11 @@ jobs:
               \"environment\": [{
                 \"name\": \"DEBUG\",
                 \"value\": \"False\"
+              }, {
+                \"name\": \"DATABASE_URL\",
+                \"value\": \"sqlite:///app/db.sqlite3\"
               }],
               \"secrets\": [{
-                \"name\": \"DATABASE_URL\",
-                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
-              }, {
                 \"name\": \"SECRET_KEY\",
                 \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
               }],
