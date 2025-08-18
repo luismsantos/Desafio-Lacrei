@@ -297,7 +297,7 @@ jobs:
     
     - name: Run Database Migrations
       run: |
-        # Verificar se a task definition de migração existe
+        # Verificar se a task ddefinition de migração existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-staging-migrate >/dev/null 2>&1; then
           echo "Migration task definition exists, updating..."
           IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
