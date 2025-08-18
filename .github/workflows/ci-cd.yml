@@ -1044,15 +1044,33 @@ jobs:
     
     - name: Run production migrations
       run: |
-        # Garantir que o parâmetro DATABASE_URL está com SQLite antes de executar migrações
-        echo "Ensuring DATABASE_URL is set to SQLite for migrations..."
-        aws ssm put-parameter \
-          --name "/desafio-lacrei/production/database-url" \
-          --value "sqlite:////tmp/db/db.sqlite3" \
-          --type SecureString \
-          --overwrite \
-          --description "SQLite fallback for production testing - writable location"
-        echo "✅ Database URL confirmed as SQLite for migrations"
+        # Verificar se o parâmetro DATABASE_URL existe e criar PostgreSQL RDS se necessário
+        echo "Checking DATABASE_URL configuration for production..."
+        
+        # Verificar se já existe um DATABASE_URL configurado
+        if ! aws ssm get-parameter --name "/desafio-lacrei/production/database-url" >/dev/null 2>&1; then
+          echo "DATABASE_URL parameter not found. You need to configure a PostgreSQL database."
+          echo "Options:"
+          echo "1. Create an RDS PostgreSQL instance"
+          echo "2. Set the DATABASE_URL parameter manually with:"
+          echo "   aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'postgres://user:pass@host:5432/dbname' --type SecureString"
+          echo ""
+          echo "For now, using SQLite as fallback..."
+          aws ssm put-parameter \
+            --name "/desafio-lacrei/production/database-url" \
+            --value "sqlite:////tmp/db/db.sqlite3" \
+            --type SecureString \
+            --overwrite \
+            --description "SQLite fallback - PLEASE CONFIGURE POSTGRESQL RDS"
+        else
+          DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text)
+          if [[ "$DB_URL" == *"sqlite"* ]]; then
+            echo "⚠️  WARNING: Still using SQLite in production!"
+            echo "Consider setting up PostgreSQL RDS for production use."
+          else
+            echo "✅ Using configured database: ${DB_URL%%:*}://..."
+          fi
+        fi
         
         # Verificar se a task definition de migração existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
@@ -1060,7 +1078,7 @@ jobs:
           IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
           echo "Using image for production migration update: $IMAGE_TAG"
           
-          # Create completely new task definition with proper SQLite setup instead of just updating image
+          # Create task definition for migrations using configured database
           aws ecs register-task-definition \
             --family desafio-lacrei-production-migrate \
             --network-mode awsvpc \
@@ -1072,13 +1090,16 @@ jobs:
             --container-definitions "[{
               \"name\": \"desafio-lacrei-migrate\",
               \"image\": \"$IMAGE_TAG\",
-              \"command\": [\"sh\", \"-c\", \"mkdir -p /tmp/db && DATABASE_URL=sqlite:////tmp/db/db.sqlite3 python manage.py migrate\"],
+              \"command\": [\"python\", \"manage.py\", \"migrate\"],
               \"essential\": true,
               \"environment\": [{
                 \"name\": \"DEBUG\",
                 \"value\": \"False\"
               }],
               \"secrets\": [{
+                \"name\": \"DATABASE_URL\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
+              }, {
                 \"name\": \"SECRET_KEY\",
                 \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
               }],
@@ -1092,7 +1113,7 @@ jobs:
               }
             }]"
         else
-          echo "Creating migration task definition with SQLite support..."
+          echo "Creating migration task definition..."
           
           # Extrair apenas a primeira imagem da lista de tags
           IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
@@ -1109,13 +1130,16 @@ jobs:
             --container-definitions "[{
               \"name\": \"desafio-lacrei-migrate\",
               \"image\": \"$IMAGE_TAG\",
-              \"command\": [\"sh\", \"-c\", \"mkdir -p /tmp/db && DATABASE_URL=sqlite:////tmp/db/db.sqlite3 python manage.py migrate\"],
+              \"command\": [\"python\", \"manage.py\", \"migrate\"],
               \"essential\": true,
               \"environment\": [{
                 \"name\": \"DEBUG\",
                 \"value\": \"False\"
               }],
               \"secrets\": [{
+                \"name\": \"DATABASE_URL\",
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
+              }, {
                 \"name\": \"SECRET_KEY\",
                 \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
               }],
