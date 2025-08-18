@@ -441,6 +441,27 @@ jobs:
               --task-definition desafio-lacrei-production:$NEW_REVISION
           else
             echo "Service doesn't exist, creating with new task definition..."
+            
+            # Validar que temos todos os parâmetros necessários
+            echo "Validating configuration..."
+            echo "Subnets: ${{ secrets.AWS_SUBNET_1 }}, ${{ secrets.AWS_SUBNET_2 }}"
+            echo "Security Group: ${{ secrets.AWS_SECURITY_GROUP }}"
+            echo "Account ID: ${{ secrets.AWS_ACCOUNT_ID }}"
+            echo "Region: ${{ secrets.AWS_REGION }}"
+            
+            # Verificar se os SSM parameters existem
+            if ! aws ssm get-parameter --name "/desafio-lacrei/production/database-url" >/dev/null 2>&1; then
+              echo "ERROR: SSM parameter /desafio-lacrei/production/database-url not found!"
+              echo "Please create it with: aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'your-db-url' --type SecureString"
+              exit 1
+            fi
+            
+            if ! aws ssm get-parameter --name "/desafio-lacrei/production/secret-key" >/dev/null 2>&1; then
+              echo "ERROR: SSM parameter /desafio-lacrei/production/secret-key not found!"
+              echo "Please create it with: aws ssm put-parameter --name '/desafio-lacrei/production/secret-key' --value 'your-secret-key' --type SecureString"
+              exit 1
+            fi
+            
             aws ecs create-service \
               --cluster desafio-lacrei-production \
               --service-name desafio-lacrei-production-service \
@@ -510,6 +531,19 @@ jobs:
               --force-new-deployment
           else
             echo "Service doesn't exist, creating..."
+            
+            # Validar configuração antes de criar o serviço
+            echo "Validating configuration..."
+            if [ -z "${{ secrets.AWS_SUBNET_1 }}" ] || [ -z "${{ secrets.AWS_SUBNET_2 }}" ]; then
+              echo "ERROR: AWS_SUBNET_1 and AWS_SUBNET_2 must be configured in GitHub Secrets"
+              exit 1
+            fi
+            
+            if [ -z "${{ secrets.AWS_SECURITY_GROUP }}" ]; then
+              echo "ERROR: AWS_SECURITY_GROUP must be configured in GitHub Secrets"
+              exit 1
+            fi
+            
             aws ecs create-service \
               --cluster desafio-lacrei-production \
               --service-name desafio-lacrei-production-service \
@@ -525,9 +559,35 @@ jobs:
     
     - name: Wait for production deployment
       run: |
-        aws ecs wait services-stable \
-          --cluster desafio-lacrei-production \
-          --services desafio-lacrei-production-service
+        echo "Waiting for service to stabilize..."
+        
+        # Verificar status do serviço antes de aguardar
+        aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service
+        
+        # Aguardar com timeout reduzido e melhor tratamento de erro
+        if ! timeout 600 aws ecs wait services-stable --cluster desafio-lacrei-production --services desafio-lacrei-production-service; then
+          echo "Service failed to stabilize, checking task status..."
+          
+          # Mostrar status das tasks
+          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --query 'taskArns[]' --output text)
+          if [ ! -z "$TASK_ARNS" ]; then
+            echo "Task ARNs: $TASK_ARNS"
+            aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS
+            
+            # Mostrar logs das tasks que falharam
+            for TASK_ARN in $TASK_ARNS; do
+              TASK_ID=$(echo $TASK_ARN | cut -d'/' -f3)
+              echo "Checking logs for task: $TASK_ID"
+              aws logs get-log-events \
+                --log-group-name "/ecs/desafio-lacrei-production" \
+                --log-stream-name "ecs/desafio-lacrei-app/$TASK_ID" \
+                --query 'events[*].message' --output text || echo "No logs found for task $TASK_ID"
+            done
+          fi
+          exit 1
+        fi
+        
+        echo "Service stabilized successfully!"
     
     - name: Run production migrations
       run: |
