@@ -7,7 +7,7 @@ echo "🚀 Starting development server..."
 source /opt/venv/bin/activate
 
 # Create database directory
-mkdir -p /tmp/db
+mkdir -p /tmp/db  # nosec B108
 
 # Check if we need to run migrations
 echo "📊 Checking database status..."
