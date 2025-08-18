@@ -95,9 +95,7 @@ WSGI_APPLICATION = "core.wsgi.application"
 
 DATABASES = {
     "default": dj_database_url.config(
-        default=config(
-            "DATABASE_URL", default="postgres://user:123@db:5432/lacrei-db"
-        )
+        default=config("DATABASE_URL", default="postgres://user:123@db:5432/lacrei-db")
     )
 }
 
