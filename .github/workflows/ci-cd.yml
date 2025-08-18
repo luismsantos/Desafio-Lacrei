@@ -1,17 +1,3 @@
-# Este workflow implementa CI/CD completo para o projeto Desafio Lacrei
-# Inclui lint, testes, build Docker e deploy para produção
-#
-# Secrets necessários no GitHub:
-# AWS_ACCESS_KEY_ID - Chave de acesso AWS
-# AWS_SECRET_ACCESS_KEY - Chave secreta AWS  
-# AWS_REGION - Região AWS (ex: us-east-1)
-# AWS_ACCOUNT_ID - ID da conta AWS
-# AWS_SUBNET_1 - ID da primeira subnet pública
-# AWS_SUBNET_2 - ID da segunda subnet pública
-# AWS_SECURITY_GROUP - ID do security group
-# DOCKER_HUB_USERNAME - Usuário do Docker Hub (opcional)
-# DOCKER_HUB_ACCESS_TOKEN - Token de acesso do Docker Hub (opcional)
-
 name: CI/CD Pipeline
 
 on:
@@ -790,6 +776,80 @@ jobs:
                 --force-new-deployment
               
               sleep 45  # Menos tempo de espera para acelerar
+              continue
+            fi
+          fi
+          
+          # Detectar tasks presas em PENDING por muito tempo (3+ attempts)
+          if [ "$PENDING_COUNT" -gt 0 ] && [ "$RUNNING_COUNT" = "0" ] && [ $WAIT_ATTEMPTS -ge 3 ]; then
+            echo "=== DETECTED: TASKS STUCK IN PENDING STATE FOR 3+ ATTEMPTS ==="
+            echo "Pending tasks: $PENDING_COUNT, Running tasks: $RUNNING_COUNT"
+            echo "This often indicates network configuration or resource allocation issues"
+            
+            # Buscar logs de tasks PENDING para entender o problema
+            LATEST_TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --desired-status PENDING --query 'taskArns[0]' --output text 2>/dev/null || echo "")
+            
+            if [ -n "$LATEST_TASK_ARN" ] && [ "$LATEST_TASK_ARN" != "None" ]; then
+              echo "Checking PENDING task logs: $LATEST_TASK_ARN"
+              TASK_DEFINITION_ARN=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks "$LATEST_TASK_ARN" --query 'tasks[0].taskDefinitionArn' --output text 2>/dev/null || echo "")
+              
+              # Criar task definition reduzida para melhorar chance de sucesso
+              echo "Creating reduced resource task definition for better deployment success..."
+              aws ecs register-task-definition \
+                --family desafio-lacrei-production \
+                --network-mode awsvpc \
+                --requires-attributes name=com.amazonaws.ecs.capability.docker-remote-api.1.18 \
+                --cpu 256 \
+                --memory 512 \
+                --execution-role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/ecsTaskExecutionRole \
+                --task-role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/ecsTaskRole \
+                --container-definitions '[{
+                  "name": "desafio-lacrei",
+                  "image": "ghcr.io/${{ github.repository }}:${{ github.sha }}",
+                  "essential": true,
+                  "portMappings": [{
+                    "containerPort": 8000,
+                    "protocol": "tcp"
+                  }],
+                  "environment": [{
+                    "name": "ENVIRONMENT",
+                    "value": "production"
+                  }],
+                  "secrets": [{
+                    "name": "SECRET_KEY",
+                    "valueFrom": "/desafio-lacrei/production/secret-key"
+                  }, {
+                    "name": "DATABASE_URL",
+                    "valueFrom": "/desafio-lacrei/production/database-url"
+                  }],
+                  "logConfiguration": {
+                    "logDriver": "awslogs",
+                    "options": {
+                      "awslogs-group": "/ecs/desafio-lacrei-production",
+                      "awslogs-region": "us-east-1",
+                      "awslogs-stream-prefix": "ecs"
+                    }
+                  },
+                  "cpu": 256,
+                  "memory": 512
+                }]' || echo "Failed to create reduced task definition"
+              
+              # Aplicar configuração de rede alternativa (subnets padrão)
+              echo "Attempting deployment with default network configuration..."
+              aws ecs update-service \
+                --cluster desafio-lacrei-production \
+                --service desafio-lacrei-production-service \
+                --network-configuration 'awsvpcConfiguration={subnets=[subnet-12345678],securityGroups=[sg-12345678],assignPublicIp=ENABLED}' \
+                --force-new-deployment || echo "Network config update failed, continuing with force deployment..."
+              
+              # Se falhou, fazer deployment forçado simples
+              echo "Forcing new deployment to break PENDING state..."
+              aws ecs update-service \
+                --cluster desafio-lacrei-production \
+                --service desafio-lacrei-production-service \
+                --force-new-deployment
+              
+              sleep 30
               continue
             fi
           fi
