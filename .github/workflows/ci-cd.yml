@@ -228,6 +228,19 @@ jobs:
     
     - name: Deploy to ECS Staging
       run: |
+        # Garantir que o cluster existe
+        if ! aws ecs describe-clusters --clusters desafio-lacrei-staging --query 'clusters[0].clusterName' --output text 2>/dev/null | grep -q "desafio-lacrei-staging"; then
+          echo "Cluster doesn't exist, creating..."
+          aws ecs create-cluster --cluster-name desafio-lacrei-staging
+          echo "Cluster created successfully!"
+        else
+          echo "Cluster exists"
+        fi
+        
+        # Garantir que os log groups existem
+        aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-staging" 2>/dev/null || echo "Log group already exists"
+        aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-staging-migrate" 2>/dev/null || echo "Migration log group already exists"
+        
         # Verificar se o serviço existe, senão criar
         if aws ecs describe-services --cluster desafio-lacrei-staging --services desafio-lacrei-staging-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-staging-service"; then
           echo "Service exists, updating..."
@@ -393,6 +406,19 @@ jobs:
     
     - name: Deploy to ECS Production
       run: |
+        # Garantir que o cluster existe
+        if ! aws ecs describe-clusters --clusters desafio-lacrei-production --query 'clusters[0].clusterName' --output text 2>/dev/null | grep -q "desafio-lacrei-production"; then
+          echo "Cluster doesn't exist, creating..."
+          aws ecs create-cluster --cluster-name desafio-lacrei-production
+          echo "Cluster created successfully!"
+        else
+          echo "Cluster exists"
+        fi
+        
+        # Garantir que os log groups existem
+        aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production" 2>/dev/null || echo "Log group already exists"
+        aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production-migrate" 2>/dev/null || echo "Migration log group already exists"
+        
         # Verificar se a task definition existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production >/dev/null 2>&1; then
           echo "Task definition exists, implementing Blue/Green deployment..."
