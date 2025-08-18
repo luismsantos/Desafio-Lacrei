@@ -415,7 +415,7 @@ jobs:
           echo "Cluster exists"
         fi
         
-        # Garantir que os log groups existem
+        # Garantir que os log groups existemm
         aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production" 2>/dev/null || echo "Log group already exists"
         aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production-migrate" 2>/dev/null || echo "Migration log group already exists"
         
