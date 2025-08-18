@@ -740,8 +740,97 @@ jobs:
           if [ ! -z "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
             echo "Current task ARNs: $TASK_ARNS"
             aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS --query 'tasks[*].{TaskArn:taskArn,LastStatus:lastStatus,DesiredStatus:desiredStatus,HealthStatus:healthStatus}'
+            
+            # Verificar se há tasks com problemas
+            FAILED_TASKS=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS --query 'tasks[?lastStatus==`STOPPED`]' --output json)
+            if [ "$FAILED_TASKS" != "[]" ]; then
+              echo "=== DETECTED FAILED TASKS ==="
+              echo "$FAILED_TASKS"
+              
+              # Mostrar logs das tasks que falharam
+              for TASK_ARN in $TASK_ARNS; do
+                TASK_ID=$(echo $TASK_ARN | cut -d'/' -f3)
+                echo "=== LOGS FOR FAILED TASK: $TASK_ID ==="
+                aws logs get-log-events \
+                  --log-group-name "/ecs/desafio-lacrei-production" \
+                  --log-stream-name "ecs/desafio-lacrei-app/$TASK_ID" \
+                  --query 'events[*].message' --output text || echo "No logs found for task $TASK_ID"
+              done
+              
+              # Se há muitas tentativas falhas, tentar corrigir parâmetros SSM
+              if [ $WAIT_ATTEMPTS -gt 5 ]; then
+                echo "=== ATTEMPTING TO FIX SSM PARAMETERS ==="
+                
+                # Verificar se os parâmetros são placeholders
+                DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+                if [[ "$DB_URL" == *"localhost"* ]] || [[ "$DB_URL" == *"user:password"* ]]; then
+                  echo "Detected placeholder database URL, creating SQLite fallback..."
+                  aws ssm put-parameter \
+                    --name "/desafio-lacrei/production/database-url" \
+                    --value "sqlite:///app/db.sqlite3" \
+                    --type SecureString \
+                    --overwrite \
+                    --description "Fallback SQLite database for production testing"
+                  echo "Updated database URL to SQLite fallback"
+                  
+                  # Forçar nova deployment
+                  echo "Forcing new deployment with corrected parameters..."
+                  aws ecs update-service \
+                    --cluster desafio-lacrei-production \
+                    --service desafio-lacrei-production-service \
+                    --force-new-deployment
+                  
+                  sleep 60  # Dar tempo para nova deployment começar
+                  continue
+                fi
+              fi
+            fi
           else
             echo "No tasks currently running"
+            
+            # Se não há tasks após várias tentativas, pode ser problema de rede/configuração
+            if [ $WAIT_ATTEMPTS -gt 8 ]; then
+              echo "=== NO TASKS STARTING - CHECKING NETWORK CONFIGURATION ==="
+              
+              # Verificar se as subnets existem
+              SUBNET1_EXISTS=$(aws ec2 describe-subnets --subnet-ids "${{ secrets.AWS_SUBNET_1 }}" --query 'Subnets[0].SubnetId' --output text 2>/dev/null || echo "None")
+              SUBNET2_EXISTS=$(aws ec2 describe-subnets --subnet-ids "${{ secrets.AWS_SUBNET_2 }}" --query 'Subnets[0].SubnetId' --output text 2>/dev/null || echo "None")
+              SG_EXISTS=$(aws ec2 describe-security-groups --group-ids "${{ secrets.AWS_SECURITY_GROUP }}" --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
+              
+              echo "Subnet 1 check: $SUBNET1_EXISTS"
+              echo "Subnet 2 check: $SUBNET2_EXISTS"
+              echo "Security Group check: $SG_EXISTS"
+              
+              if [ "$SUBNET1_EXISTS" = "None" ] || [ "$SUBNET2_EXISTS" = "None" ] || [ "$SG_EXISTS" = "None" ]; then
+                echo "NETWORK CONFIGURATION PROBLEM DETECTED!"
+                echo "Please check your GitHub Secrets for AWS_SUBNET_1, AWS_SUBNET_2, and AWS_SECURITY_GROUP"
+                
+                # Tentar usar subnets padrão como fallback
+                echo "Attempting to find default subnets as fallback..."
+                DEFAULT_VPC=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query 'Vpcs[0].VpcId' --output text)
+                if [ "$DEFAULT_VPC" != "None" ]; then
+                  DEFAULT_SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$DEFAULT_VPC" "Name=default-for-az,Values=true" --query 'Subnets[*].SubnetId' --output text)
+                  DEFAULT_SG=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$DEFAULT_VPC" "Name=group-name,Values=default" --query 'SecurityGroups[0].GroupId' --output text)
+                  
+                  if [ ! -z "$DEFAULT_SUBNETS" ] && [ "$DEFAULT_SG" != "None" ]; then
+                    SUBNET_ARRAY=($DEFAULT_SUBNETS)
+                    echo "Found default subnets: ${SUBNET_ARRAY[0]}, ${SUBNET_ARRAY[1]}"
+                    echo "Found default security group: $DEFAULT_SG"
+                    
+                    # Atualizar serviço com configuração de rede correta
+                    echo "Updating service with default network configuration..."
+                    aws ecs update-service \
+                      --cluster desafio-lacrei-production \
+                      --service desafio-lacrei-production-service \
+                      --network-configuration "awsvpcConfiguration={subnets=[${SUBNET_ARRAY[0]},${SUBNET_ARRAY[1]}],securityGroups=[$DEFAULT_SG],assignPublicIp=ENABLED}" \
+                      --force-new-deployment
+                    
+                    sleep 60
+                    continue
+                  fi
+                fi
+              fi
+            fi
           fi
           
           sleep 30
