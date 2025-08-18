@@ -1,3 +1,15 @@
+# Este workflow implementa CI/CD completo para o projeto Desafio Lacrei
+# Inclui lint, testes, build Docker e deploy para produção
+#
+# Secrets necessários no GitHub:
+# AWS_ACCESS_KEY_ID - Chave de acesso AWS
+# AWS_SECRET_ACCESS_KEY - Chave secreta AWS  
+# AWS_REGION - Região AWS (ex: us-east-1)
+# AWS_ACCOUNT_ID - ID da conta AWS
+# AWS_SUBNET_1 - ID da primeira subnet privada
+# AWS_SUBNET_2 - ID da segunda subnet privada
+# AWS_SECURITY_GROUP - ID do security group
+
 name: CI/CD Pipeline
 
 on:
@@ -224,14 +236,80 @@ jobs:
           --cluster desafio-lacrei-staging \
           --services desafio-lacrei-staging-service
     
-    - name: Run database migrations
+    - name: Run Database Migrations
       run: |
-        # Executar migrações no ambiente staging
-        aws ecs run-task \
-          --cluster desafio-lacrei-staging \
-          --task-definition desafio-lacrei-staging-migrate \
-          --launch-type FARGATE \
-          --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.STAGING_SUBNET_IDS }}],securityGroups=[${{ secrets.STAGING_SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}"
+        # Verificar se a task definition de migração existe
+        if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
+          echo "Migration task definition exists, updating..."
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate --query taskDefinition)
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION"
+        else
+          echo "Creating migration task definition..."
+          cat > migrate-task-definition.json << EOF
+        {
+          "family": "desafio-lacrei-production-migrate",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole",
+          "taskRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole",
+          "containerDefinitions": [
+            {
+              "name": "desafio-lacrei-migrate",
+              "image": "${{ needs.build.outputs.image-tag }}",
+              "command": ["python", "manage.py", "migrate"],
+              "essential": true,
+              "environment": [
+                {
+                  "name": "DEBUG",
+                  "value": "False"
+                }
+              ],
+              "secrets": [
+                {
+                  "name": "DATABASE_URL",
+                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
+                },
+                {
+                  "name": "SECRET_KEY",
+                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
+                }
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/desafio-lacrei-production-migrate",
+                  "awslogs-region": "${{ secrets.AWS_REGION }}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ]
+        }
+        EOF
+          aws ecs register-task-definition --cli-input-json file://migrate-task-definition.json
+        fi
+        
+        # Executar task de migração
+        TASK_ARN=$(aws ecs run-task 
+          --cluster desafio-lacrei-production 
+          --task-definition desafio-lacrei-production-migrate 
+          --launch-type FARGATE 
+          --network-configuration 'awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}' 
+          --query 'tasks[0].taskArn' --output text)
+          
+        # Aguardar conclusão da migração
+        echo "Aguardando migração concluir..."
+        aws ecs wait tasks-stopped --cluster desafio-lacrei-production --tasks $TASK_ARN
+        
+        # Verificar se a migração foi bem-sucedida
+        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode')
+        if [ "$EXIT_CODE" != "0" ]; then
+          echo "Migração falhou com exit code: $EXIT_CODE"
+          exit 1
+        fi
 
   deploy-production:
     name: 🚀 Deploy to Production
@@ -251,20 +329,95 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
     
-    - name: Blue/Green Deploy to ECS Production
+    - name: Deploy to ECS Production
       run: |
-        # Implementar estratégia Blue/Green
-        # 1. Criar nova task definition
-        TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
-        NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
-        NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
-        NEW_REVISION=$(echo $NEW_TASK_INFO | jq '.taskDefinition.revision')
-        
-        # 2. Atualizar serviço com nova task definition
-        aws ecs update-service \
-          --cluster desafio-lacrei-production \
-          --service desafio-lacrei-production-service \
-          --task-definition desafio-lacrei-production:$NEW_REVISION
+        # Verificar se a task definition existe
+        if aws ecs describe-task-definition --task-definition desafio-lacrei-production >/dev/null 2>&1; then
+          echo "Task definition exists, implementing Blue/Green deployment..."
+          
+          # Blue/Green Deploy - Atualizar task definition existente
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ needs.build.outputs.image-tag }}" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
+          NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
+          
+          # Atualizar serviço com nova task definition
+          aws ecs update-service \
+            --cluster desafio-lacrei-production \
+            --service desafio-lacrei-production-service \
+            --task-definition desafio-lacrei-production:$NEW_REVISION
+        else
+          echo "Task definition doesn't exist, creating initial deployment..."
+          
+          # Primeira vez - criar task definition base
+          cat > task-definition.json << EOF
+        {
+          "family": "desafio-lacrei-production",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "512",
+          "memory": "1024",
+          "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole",
+          "taskRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole",
+          "containerDefinitions": [
+            {
+              "name": "desafio-lacrei-app",
+              "image": "${{ needs.build.outputs.image-tag }}",
+              "portMappings": [
+                {
+                  "containerPort": 8000,
+                  "protocol": "tcp"
+                }
+              ],
+              "essential": true,
+              "environment": [
+                {
+                  "name": "DEBUG",
+                  "value": "False"
+                },
+                {
+                  "name": "ALLOWED_HOSTS",
+                  "value": "*"
+                }
+              ],
+              "secrets": [
+                {
+                  "name": "DATABASE_URL",
+                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url"
+                },
+                {
+                  "name": "SECRET_KEY",
+                  "valueFrom": "arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key"
+                }
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/desafio-lacrei-production",
+                  "awslogs-region": "${{ secrets.AWS_REGION }}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ]
+        }
+        EOF
+          
+          # Registrar task definition inicial
+          aws ecs register-task-definition --cli-input-json file://task-definition.json
+          
+          # Atualizar ou criar serviço
+          if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service >/dev/null 2>&1; then
+            aws ecs update-service \
+              --cluster desafio-lacrei-production \
+              --service desafio-lacrei-production-service \
+              --task-definition desafio-lacrei-production \
+              --force-new-deployment
+          else
+            echo "Service doesn't exist. Please create the ECS service manually first."
+            exit 1
+          fi
+        fi
     
     - name: Wait for production deployment
       run: |
