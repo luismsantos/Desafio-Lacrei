@@ -60,9 +60,6 @@ WORKDIR /app
 # Copiar código da aplicação
 COPY --chown=appuser:appuser . .
 
-# Tornar o script executável
-RUN chmod +x /app/dev-entrypoint.sh
-
 # Criar diretório para logs
 RUN mkdir -p /var/log/django && chown appuser:appuser /var/log/django
 
