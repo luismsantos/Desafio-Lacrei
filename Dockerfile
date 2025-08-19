@@ -86,6 +86,5 @@ EXPOSE 8000
 # HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 #     CMD curl -f http://localhost:8000/health/ || exit 1
 
-# Comando padrão - usar bash para garantir execução
-ENTRYPOINT ["/bin/bash", "./entrypoint.sh"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "30", "core.wsgi:application"]
+# Comando padrão simplificado - sem entrypoint por enquanto
+CMD ["/bin/bash", "-c", "python manage.py migrate --noinput || true && gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 30 core.wsgi:application"]
