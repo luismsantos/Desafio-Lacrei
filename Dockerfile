@@ -57,17 +57,21 @@ RUN chown -R appuser:appuser ${VIRTUAL_ENV}
 # Definir diretório de trabalho
 WORKDIR /app
 
-# Copiar código da aplicação
-COPY --chown=appuser:appuser . .
+# Copiar código da aplicação e tornar entrypoint executável
+COPY . .
+RUN chmod +x entrypoint.sh && \
+    chmod +x *.sh 2>/dev/null || true
 
 # Criar diretórios necessários com as permissões corretas
 RUN mkdir -p /var/log/django staticfiles && \
-    chown -R appuser:appuser /var/log/django staticfiles /app && \
     chmod -R 755 /app && \
     chmod -R 777 staticfiles
 
 # Coletar arquivos estáticos como root antes de mudar para appuser
 RUN python manage.py collectstatic --noinput
+
+# Ajustar permissões finais
+RUN chown -R appuser:appuser /var/log/django staticfiles /app
 
 # Ajustar permissões dos arquivos estáticos para appuser
 RUN chown -R appuser:appuser staticfiles
@@ -82,6 +86,6 @@ EXPOSE 8000
 # HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 #     CMD curl -f http://localhost:8000/health/ || exit 1
 
-# Comando padrão com entrypoint para produção
-ENTRYPOINT ["./entrypoint.sh"]
+# Comando padrão - usar bash para garantir execução
+ENTRYPOINT ["/bin/bash", "./entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "30", "core.wsgi:application"]
