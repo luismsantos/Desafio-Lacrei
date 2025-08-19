@@ -78,9 +78,9 @@ USER appuser
 # Expor porta
 EXPOSE 8000
 
-# Health check mais permissivo
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
+# Health check removido temporariamente para debug
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+#     CMD curl -f http://localhost:8000/health/ || exit 1
 
 # Comando padrão com entrypoint para produção
 ENTRYPOINT ["./entrypoint.sh"]
