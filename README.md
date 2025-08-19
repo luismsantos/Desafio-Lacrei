@@ -194,4 +194,180 @@ POST /webhooks/asaas/
 - ✅ **Pipeline CI/CD** automatizado
 - ✅ **Testes automatizados**
 
----
+## 🔒 Segurança
+
+### Checklist de Segurança
+
+**✅ Configurações Obrigatórias:**
+- **TLS/HTTPS:** Sempre usar HTTPS em produção
+- **HSTS:** Header `Strict-Transport-Security` configurado
+- **JWT:** Tokens com expiração de 15min (access) e 7 dias (refresh)
+- **Secrets:** Rotação mensal de `SECRET_KEY` e credenciais DB
+- **Senhas:** Mínimo 8 caracteres, Django PBKDF2 por padrão
+
+### Configuração por Ambiente
+
+```bash
+# .env.development
+DEBUG=True
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# .env.production  
+DEBUG=False
+CORS_ALLOWED_ORIGINS=https://lacrei.com.br
+ALLOWED_HOSTS=54.207.65.222,lacrei.com.br
+SECURE_SSL_REDIRECT=True
+SECURE_HSTS_SECONDS=31536000
+```
+
+### Rate Limiting
+
+Configurado para rotas sensíveis:
+- **Login:** 5 tentativas/minuto
+- **Listagem:** 100 requests/minuto
+- **Criação:** 10 requests/minuto
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+        'login': '5/min'
+    }
+}
+```
+
+## 📊 Monitoramento e Logs
+
+### Logs de Aplicação
+
+**Local de Armazenamento:**
+```bash
+# ECS/CloudWatch
+/aws/ecs/desafio-lacrei-production
+
+# Logs locais
+/var/log/django/application.log
+/var/log/django/error.log
+```
+
+**Como Visualizar:**
+
+```bash
+# CloudWatch (AWS)
+aws logs tail /aws/ecs/desafio-lacrei-production --follow
+
+# ECS Container Logs
+aws ecs describe-tasks --cluster desafio-lacrei-production --tasks TASK_ID
+aws logs get-log-events --log-group-name /aws/ecs/desafio-lacrei-production
+```
+
+### Health Checks
+
+```bash
+# Verificar saúde da aplicação
+curl https://54.207.65.222:8000/health/
+
+# Verificar readiness (ECS)
+curl https://54.207.65.222:8000/ready/
+```
+
+## 🔄 Deploy e Rollback
+
+### Visualizar Deploy
+
+```bash
+# Status do serviço ECS
+aws ecs describe-services \
+  --cluster desafio-lacrei-production \
+  --services desafio-lacrei-production-service
+
+# Logs de deploy
+aws logs filter-log-events \
+  --log-group-name /aws/ecs/desafio-lacrei-production \
+  --start-time 1600000000000
+```
+
+### Rollback Manual
+
+**1. Identificar versão anterior:**
+```bash
+aws ecs list-task-definitions \
+  --family-prefix desafio-lacrei-production \
+  --status ACTIVE
+```
+
+**2. Executar rollback:**
+```bash
+aws ecs update-service \
+  --cluster desafio-lacrei-production \
+  --service desafio-lacrei-production-service \
+  --task-definition desafio-lacrei-production:REVISION_ANTERIOR
+```
+
+**3. Monitorar rollback:**
+```bash
+aws ecs wait services-stable \
+  --cluster desafio-lacrei-production \
+  --services desafio-lacrei-production-service
+```
+
+### Scripts de Emergência
+
+```bash
+# Parar serviço
+./emergency-stop.sh
+
+# Deploy de emergência  
+./emergency-deploy.sh
+
+# Restaurar último backup
+./restore-backup.sh
+```
+
+## 🛡️ Configurações de Segurança Avançadas
+
+### JWT Configuration
+
+```python
+# settings.py
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+```
+
+### CORS Policy
+
+```python
+# Produção - Restritivo
+CORS_ALLOWED_ORIGINS = [
+    "https://lacrei.com.br",
+    "https://app.lacrei.com.br",
+]
+
+# Desenvolvimento - Permissivo
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+```
+
+### Headers de Segurança
+
+```python
+# settings.py
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_HSTS_SECONDS = 31536000  # 1 ano
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+```
