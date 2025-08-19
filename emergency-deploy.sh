@@ -27,8 +27,16 @@ IMAGE_TAG="emergency-$(date +%s)"
 docker tag emergency-lacrei ghcr.io/luismsantos/desafio-lacrei:$IMAGE_TAG
 docker push ghcr.io/luismsantos/desafio-lacrei:$IMAGE_TAG
 
-# 4. Criar nova task definition sem health check
+# 4. Criar nova task definition sem health check e sem entrypoint
 echo "📋 Creating emergency task definition..."
+
+# Obter ARNs atuais das roles
+EXECUTION_ROLE=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query 'taskDefinition.executionRoleArn' --output text 2>/dev/null || echo "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/ecsTaskExecutionRole")
+TASK_ROLE=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query 'taskDefinition.taskRoleArn' --output text 2>/dev/null || echo "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/ecsTaskRole")
+
+echo "Using Execution Role: $EXECUTION_ROLE"
+echo "Using Task Role: $TASK_ROLE"
+
 TASK_DEF=$(cat <<EOF
 {
   "family": "desafio-lacrei-production",
@@ -36,8 +44,8 @@ TASK_DEF=$(cat <<EOF
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
   "memory": "2048",
-  "executionRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskRole",
+  "executionRoleArn": "$EXECUTION_ROLE",
+  "taskRoleArn": "$TASK_ROLE",
   "containerDefinitions": [
     {
       "name": "desafio-lacrei-app",
@@ -52,6 +60,20 @@ TASK_DEF=$(cat <<EOF
         {
           "name": "DEBUG",
           "value": "False"
+        },
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "core.settings_production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:$(aws sts get-caller-identity --query Account --output text):secret:desafio-lacrei/database-url"
+        },
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:$(aws sts get-caller-identity --query Account --output text):secret:desafio-lacrei/secret-key"
         }
       ],
       "logConfiguration": {
@@ -61,7 +83,9 @@ TASK_DEF=$(cat <<EOF
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "emergency"
         }
-      }
+      },
+      "essential": true,
+      "user": "appuser"
     }
   ]
 }
