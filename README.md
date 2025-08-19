@@ -1,6 +1,11 @@
 # 🏥 Lacrei Saúde - API de Consultas Médicas
 
-Sistema de gerenciamento de consultas médicas com foco em inclusividade para a comunidade LGBTQIA+.
+Sistema de gerenci## 🚀 API Endpoints
+
+**Produção:** `http://54.207.65.222:8000` | **Local:** `http://localhost:8000`
+
+### 📋 Documentação Interativa
+- **Swagger UI:** [`/swagger/`](http://54.207.65.222:8000/swagger/) - Testar endpoints
 
 **🚀 [Acesse a API em Produção](http://54.207.65.222:8000/swagger/)**
 
@@ -119,17 +124,81 @@ docker-compose exec web pytest --cov=.
 poetry run pytest
 ```
 
+## 💳 Integração com Asaas (Gateway de Pagamento)
+
+### Arquitetura Proposta
+
+```python
+# Modelo de Pagamento
+class Pagamento(models.Model):
+    consulta = models.OneToOneField(Consulta, on_delete=models.CASCADE)
+    valor = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=[
+        ('PENDENTE', 'Pendente'),
+        ('PAGO', 'Pago'),
+        ('CANCELADO', 'Cancelado')
+    ])
+    asaas_payment_id = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+```
+
+### Implementação com Asaas API
+
+**Endpoint de Pagamento:**
+```bash
+POST /api/consultas/{id}/pagamento/
+{
+  "valor": 150.00,
+  "metodo": "PIX",  
+  "customer": {
+    "nome": "Paciente Nome",
+    "email": "paciente@email.com",
+    "cpf": "12345678901"
+  }
+}
+```
+
+**Webhook Asaas:**
+```bash
+POST /webhooks/asaas/
+# Recebe notificações de pagamento aprovado/rejeitado
+# Atualiza status da consulta automaticamente
+```
+
+### Fluxo de Pagamento
+
+1. **Agendamento** → Consulta criada (status: PENDENTE)
+2. **Gerar Cobrança** → Integração com Asaas API
+3. **Pagamento** → Cliente paga via PIX/Boleto/Cartão
+4. **Confirmação** → Webhook atualiza consulta (status: CONFIRMADA)
+5. **Atendimento** → Consulta liberada para o profissional
+
+### 🔧 Exemplo de Uso da API
+
+**Variáveis de Ambiente (Postman):**
+```json
+{
+  "base_url": "http://54.207.65.222:8000",
+  "jwt_token": "{{access_token}}"
+}
+```
+
+**Headers Padrão:**
+```json
+{
+  "Authorization": "Bearer {{jwt_token}}",
+  "Content-Type": "application/json"
+}
+```
+
 ## ✨ Funcionalidades
 
 - ✅ **Autenticação JWT** completa
 - ✅ **CRUD de Profissionais** com nome social (inclusividade LGBTQIA+)
 - ✅ **Sistema de Consultas** médicas
-- ✅ **API documentada** com Swagger UI
+- ✅ **Gateway de Pagamento** (Asaas integração)
 - ✅ **Deploy em produção** na AWS
 - ✅ **Pipeline CI/CD** automatizado
 - ✅ **Testes automatizados**
 
 ---
-
-**Desenvolvido para o Desafio Lacrei Saúde** 🏳️‍🌈  
-*Saúde inclusiva e acessível para toda comunidade LGBTQIA+*
