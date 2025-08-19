@@ -1,182 +1,136 @@
-# Desafio Lacrei - API REST
+# 🏥 Lacrei Saúde - API de Consultas Médicas
 
-API REST desenvolvida em Django REST Framework para gerenciamento de profissionais e consultas.
+Sistema de gerenciamento de consultas médicas com foco em inclusividade para a comunidade LGBTQIA+.
 
-## 🚀 Funcionalidades
+**🚀 [Acesse a API em Produção](http://54.207.65.222:8000/swagger/)**
 
-- **Autenticação JWT**: Sistema completo de autenticação com tokens JWT
-- **Gerenciamento de Profissionais**: CRUD completo para profissionais de saúde
-- **Sistema de Consultas**: Agendamento e gerenciamento de consultas
-- **Documentação Swagger**: API totalmente documentada com Swagger/OpenAPI
-- **Testes Automatizados**: Cobertura completa de testes
+## 🎯 Sobre o Projeto
 
-## 🛠️ Tecnologias Utilizadas
+Plataforma desenvolvida para o **Desafio Lacrei Saúde** que permite:
 
-- Python 3.11+
-- Django 5.2.5
-- Django REST Framework
-- JWT Authentication
-- PostgreSQL
-- Docker & Docker Compose
-- Poetry (Gerenciamento de dependências)
+- 👩‍⚕️ Cadastro de profissionais com **nome social**
+- 📅 Agendamento e gerenciamento de consultas
+- 🔐 Autenticação JWT segura
+- 📊 API RESTful documentada com Swagger
 
-## 📦 Por que Poetry?
+## 🛠 Tecnologias
 
-Este projeto usa **Poetry** como gerenciador de dependências porque:
+**Backend:**
+- Django 5.2.5 + Django REST Framework 3.16.1
+- PostgreSQL 17.5 + psycopg2-binary 2.9.10
+- SimpleJWT 5.5.1 (autenticação)
+- WhiteNoise 6.9.0 (arquivos estáticos)
+- drf-yasg 1.21.10 (documentação Swagger)
 
-- **Resolução de dependências**: Evita conflitos entre bibliotecas
-- **Ambientes virtuais**: Criação automática e isolada
-- **Lock file**: Garante versões consistentes entre diferentes máquinas
-- **Facilidade**: Comandos simples e intuitivos
-- **Padrão moderno**: Ferramenta recomendada pela comunidade Python
+**DevOps:**
+- Docker + Docker Compose
+- Gunicorn 23.0.0 (WSGI server)
+- Poetry (gerenciamento de dependências)
 
-## 📋 Pré-requisitos
+**Qualidade:**
+- pytest + Black + Flake8 + Bandit
 
-- Python 3.11 ou superior
-- Poetry (gerenciador de dependências)
-- Docker
-- Git
+## 🏗 Estrutura do Projeto
 
-## 🔧 Instalação e Configuração
+```
+authentication/    # Sistema de login/registro JWT
+profissionais/     # CRUD de profissionais (com nome social)
+consultas/         # CRUD de consultas médicas
+core/              # Configurações Django + health checks
+```
 
-### 1. Clone o repositório
+**Modelos principais:**
+- `Profissional`: nome, nome_social, especialidade, email, telefone
+- `Consulta`: profissional, paciente_nome, data_hora, observacoes
+
+## ⚙️ Como Executar
+
+### Com Docker (Recomendado)
 
 ```bash
 git clone https://github.com/luismsantos/Desafio-Lacrei.git
 cd Desafio-Lacrei
+docker build -t lacrei-saude .  
+docker run -p 8000:8000 lacrei-saude
 ```
 
-### 2. Configure as variáveis de ambiente
+**🎉 Acesse:** `http://localhost:8000/swagger/`
 
-Copie o arquivo de exemplo e configure suas variáveis:
+### Variáveis de Ambiente
+```bash
+DATABASE_URL=postgres://user:password@host:port/database
+SECRET_KEY=sua-chave-secreta
+DEBUG=False
+```
+
+## 🚀 API Endpoints
+
+**Produção:** `http://54.207.65.222:8000` | **Local:** `http://localhost:8000`  
+**� Documentação:** `/swagger/`
+
+### Principais Rotas
+
+**Autenticação (`/api/auth/`):**
+- `POST /registrar/` - Registrar usuário
+- `POST /entrar/` - Login (retorna JWT)
+- `GET /perfil/` - Dados do usuário
+
+**Profissionais (`/api/profissionais/`):**
+- `GET /` - Listar profissionais
+- `POST /` - Criar profissional  
+- `GET /{id}/` - Detalhes
+- `PUT /{id}/` - Atualizar
+
+**Consultas (`/api/consultas/`):**
+- `GET /` - Listar consultas
+- `POST /` - Agendar consulta
+- `GET /{id}/` - Detalhes
+- `PUT /{id}/` - Atualizar
+
+### Exemplo de Uso
 
 ```bash
-cp .env.example .env
+# Login
+curl -X POST http://54.207.65.222:8000/api/auth/entrar/ \
+  -d '{"username": "usuario", "password": "senha"}'
+
+# Criar profissional
+curl -X POST http://54.207.65.222:8000/api/profissionais/ \
+  -H "Authorization: Bearer SEU_JWT_TOKEN" \
+  -d '{"nome": "Dr. João", "nome_social": "João", "especialidade": "Cardiologia"}'
 ```
 
-Edite o arquivo `.env` com suas configurações:
+## 🚀 Deploy
 
-```env
-# Configurações do Django
-SECRET_KEY=sua-chave-secreta-super-segura-aqui
-DEBUG=True
+**🌩️ AWS:** Aplicação deployada em [http://54.207.65.222:8000/swagger/](http://54.207.65.222:8000/swagger/)
 
-# Configurações do Banco de Dados PostgreSQL
-DATABASE_URL=postgres://usuario:senha@localhost:5432/lacrei_db
-
-# Configurações opcionais
-ALLOWED_HOSTS=localhost,127.0.0.1
-```
-
-### 3. Instale o Poetry (se não tiver)
-
-```bash
-# No Linux/macOS
-curl -sSL https://install.python-poetry.org | python3 -
-
-# No Windows (PowerShell)
-(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
-```
-
-### 4. Instale as dependências
-
-```bash
-poetry install
-```
-
-### 5. Configure o banco de dados
-
-#### Usando Docker 
-
-```bash
-docker-compose up -d db
-```
-
-### 6. Execute as migrações
-
-```bash
-poetry run python manage.py migrate
-```
-
-### 7. Crie um superusuário (opcional)
-
-```bash
-poetry run python manage.py createsuperuser
-```
-
-### 8. Execute os testes
-
-```bash
-poetry run python manage.py test
-```
-
-### 9. Inicie o servidor de desenvolvimento
-
-```bash
-poetry run python manage.py runserver
-```
-
-## 🐳 Executando com Docker
-
-Para executar toda a aplicação com Docker:
-
-```bash
-docker-compose up
-```
-
-A aplicação estará disponível em: `http://localhost:8000`
-
-## 📚 Documentação da API
-
-### Swagger UI
-Acesse a documentação interativa em: `http://localhost:8000/swagger/`
-
-## 🔐 Autenticação
-
-A API utiliza JWT (JSON Web Tokens) para autenticação. 
-
-### Como usar no Swagger:
-
-1. Faça login em `/auth/entrar/`
-2. Copie o token de acesso retornado
-3. No Swagger, clique no botão "Authorize"
-4. Digite: `Bearer seu_token_aqui`
-5. Agora você pode acessar os endpoints protegidos
-
-### Endpoints de autenticação:
-
-- `POST /auth/registrar/` - Registro de novo usuário
-- `POST /auth/entrar/` - Login (retorna tokens)
-- `GET /auth/perfil/` - Perfil do usuário logado
-- `POST /auth/sair/` - Logout (blacklist do token)
+**Infraestrutura:**
+- EC2 Ubuntu 22.04 + PostgreSQL RDS
+- Docker multi-stage build otimizado
+- Pipeline CI/CD automatizado
+- Health checks (`/health/`, `/ready/`)
 
 ## 🧪 Testes
 
-Execute todos os testes:
-
 ```bash
-poetry run python manage.py test
+# Com Docker
+docker-compose exec web pytest --cov=.
+
+# Local
+poetry run pytest
 ```
 
-Execute testes de um app específico:
+## ✨ Funcionalidades
 
-```bash
-poetry run python manage.py test authentication
-poetry run python manage.py test profissionais
-poetry run python manage.py test consultas
+- ✅ **Autenticação JWT** completa
+- ✅ **CRUD de Profissionais** com nome social (inclusividade LGBTQIA+)
+- ✅ **Sistema de Consultas** médicas
+- ✅ **API documentada** com Swagger UI
+- ✅ **Deploy em produção** na AWS
+- ✅ **Pipeline CI/CD** automatizado
+- ✅ **Testes automatizados**
 
+---
 
-## 📁 Estrutura do Projeto
-
-```
-Desafio-Lacrei/
-├── authentication/          # App de autenticação JWT
-├── consultas/              # App de gerenciamento de consultas
-├── profissionais/          # App de gerenciamento de profissionais
-├── core/                   # Configurações do Django
-├── docker-compose.yml      # Configuração do Docker
-├── Dockerfile             # Container da aplicação
-├── manage.py              # Script de gerenciamento do Django
-├── pyproject.toml         # Configuração do Poetry
-└── README.md              # Este arquivo
-```
+**Desenvolvido para o Desafio Lacrei Saúde** 🏳️‍🌈  
+*Saúde inclusiva e acessível para toda comunidade LGBTQIA+*
