@@ -19,6 +19,8 @@ from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
 
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
 
@@ -54,3 +56,7 @@ urlpatterns = [
     path("api/", include("profissionais.urls")),
     path("api/", include("consultas.urls")),
 ]
+
+# Servir arquivos estáticos durante desenvolvimento
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

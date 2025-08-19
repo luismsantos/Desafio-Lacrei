@@ -60,11 +60,14 @@ WORKDIR /app
 # Copiar código da aplicação
 COPY --chown=appuser:appuser . .
 
-# Criar diretório para logs
-RUN mkdir -p /var/log/django && chown appuser:appuser /var/log/django
+# Criar diretórios necessários
+RUN mkdir -p /var/log/django staticfiles && chown -R appuser:appuser /var/log/django staticfiles
 
 # Mudar para usuário não-root
 USER appuser
+
+# Coletar arquivos estáticos
+RUN python manage.py collectstatic --noinput
 
 # Expor porta
 EXPOSE 8000
@@ -73,5 +76,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
 
-# Comando padrão
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Comando padrão com entrypoint para produção
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "30", "core.wsgi:application"]
