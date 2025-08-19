@@ -50,8 +50,7 @@ core/              # Configurações Django + health checks
 ```bash
 git clone https://github.com/luismsantos/Desafio-Lacrei.git
 cd Desafio-Lacrei
-docker build -t lacrei-saude .  
-docker run -p 8000:8000 lacrei-saude
+docker-compose up --build
 ```
 
 **🎉 Acesse:** `http://localhost:8000/swagger/`
