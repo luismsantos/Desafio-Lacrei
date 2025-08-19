@@ -60,14 +60,20 @@ WORKDIR /app
 # Copiar código da aplicação
 COPY --chown=appuser:appuser . .
 
-# Criar diretórios necessários
-RUN mkdir -p /var/log/django staticfiles && chown -R appuser:appuser /var/log/django staticfiles
+# Criar diretórios necessários com as permissões corretas
+RUN mkdir -p /var/log/django staticfiles && \
+    chown -R appuser:appuser /var/log/django staticfiles /app && \
+    chmod -R 755 /app && \
+    chmod -R 777 staticfiles
+
+# Coletar arquivos estáticos como root antes de mudar para appuser
+RUN python manage.py collectstatic --noinput
+
+# Ajustar permissões dos arquivos estáticos para appuser
+RUN chown -R appuser:appuser staticfiles
 
 # Mudar para usuário não-root
 USER appuser
-
-# Coletar arquivos estáticos
-RUN python manage.py collectstatic --noinput
 
 # Expor porta
 EXPOSE 8000
