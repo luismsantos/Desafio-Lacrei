@@ -82,6 +82,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
 
-# Comando padrão com entrypoint para produção
-ENTRYPOINT ["./entrypoint.sh"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "30", "core.wsgi:application"]
+# Comando integrado para produção (sem entrypoint externo para evitar problemas no ECS)
+CMD ["sh", "-c", "echo '🚀 Starting Django application...' && python manage.py check --database default && echo '🗄️ Running database migrations...' && python manage.py migrate --noinput && echo '✅ Starting application server...' && gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 30 core.wsgi:application"]
