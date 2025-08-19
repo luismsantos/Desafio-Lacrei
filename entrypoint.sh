@@ -5,13 +5,13 @@ set -e
 
 echo "🚀 Starting Django application..."
 
-# Aguardar banco de dados estar disponível (com timeout rápido)
-echo "⏳ Checking database connection..."
-timeout 30 python manage.py check --database default || echo "⚠️ DB check timeout, proceeding anyway"
+# Aguardar banco de dados estar disponível (se necessário)
+echo "⏳ Waiting for database to be ready..."
+python manage.py check --database default
 
-# Executar migrações (skip se falhar rapidamente)
+# Executar migrações
 echo "🗄️ Running database migrations..."
-timeout 60 python manage.py migrate --noinput || echo "⚠️ Migration timeout, proceeding anyway"
+python manage.py migrate --noinput
 
 # Inicializar aplicação
 echo "✅ Starting application server..."
