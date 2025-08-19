@@ -1,12 +1,5 @@
 # 🏥 Lacrei Saúde - API de Consultas Médicas
 
-Sistema de gerenci## 🚀 API Endpoints
-
-**Produção:** `http://54.207.65.222:8000` | **Local:** `http://localhost:8000`
-
-### 📋 Documentação Interativa
-- **Swagger UI:** [`/swagger/`](http://54.207.65.222:8000/swagger/) - Testar endpoints
-
 **🚀 [Acesse a API em Produção](http://54.207.65.222:8000/swagger/)**
 
 ## 🎯 Sobre o Projeto

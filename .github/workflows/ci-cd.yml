@@ -492,18 +492,29 @@ jobs:
         echo "Waiting for IAM roles to propagate..."
         sleep 10
         
-        # Verificar se a task definition existe
+        # Verificar se a task definition existe e se precisa ser atualizada
+        IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+        echo "Target image: $IMAGE_TAG"
+        
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production >/dev/null 2>&1; then
-          echo "Task definition exists, implementing Blue/Green deployment..."
+          echo "Task definition exists, checking if image needs update..."
           
-          # Blue/Green Deploy - Atualizar task definition existente
-          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
-          echo "Using image for Blue/Green update: $IMAGE_TAG"
+          # Verificar imagem atual da task definition
+          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query 'taskDefinition.containerDefinitions[0].image' --output text)
+          echo "Current image: $CURRENT_IMAGE"
           
-          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
-          NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
-          NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
+          if [ "$CURRENT_IMAGE" = "$IMAGE_TAG" ]; then
+            echo "Image hasn't changed, reusing existing task definition..."
+            LATEST_REVISION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query 'taskDefinition.revision' --output text)
+            NEW_REVISION=$LATEST_REVISION
+          else
+            echo "Image changed, creating new task definition revision..."
+            TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
+            NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+            NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
+            NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
+            echo "Created new revision: $NEW_REVISION"
+          fi
           
           # Verificar se o serviço existe antes de atualizar
           if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-production-service"; then
