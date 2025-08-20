@@ -322,13 +322,13 @@ aws ecs wait services-stable \
 
 ```bash
 # Parar serviço
-./emergency-stop.sh
+./scripts/emergency-stop.sh
 
 # Deploy de emergência  
-./emergency-deploy.sh
+./scripts/emergency-deploy.sh
 
 # Restaurar último backup
-./restore-backup.sh
+./scripts/restore-backup.sh
 ```
 
 ## 🛡️ Configurações de Segurança Avançadas
