@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -59,9 +60,12 @@ INSTALLED_APPS = [
     "profissionais",
 ]
 
-MIDDLEWARE = [
+# Detectar ambiente de teste
+IS_TESTING = "test" in sys.argv or os.getenv("GITHUB_ACTIONS") == "true"
+
+# Base middleware sem WhiteNoise
+BASE_MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # WhiteNoise para servir arquivos estáticos
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -70,6 +74,16 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Adicionar WhiteNoise apenas se disponível e não em teste
+MIDDLEWARE = BASE_MIDDLEWARE.copy()
+if not IS_TESTING:
+    try:
+        import whitenoise
+
+        MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
+    except ImportError:
+        pass
 
 ROOT_URLCONF = "core.urls"
 
@@ -231,12 +245,15 @@ CORS_ALLOWED_ORIGINS = config(
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
 
-# Logging Configuration
-# Use console-only logging for local testing when USE_FILE_LOGGING=False
-USE_FILE_LOGGING = os.getenv("USE_FILE_LOGGING", "True").lower() == "true"
+# Logging Configuration - apenas em produção
+# Em testes/CI, usar configuração padrão do Django
+IS_TESTING = "test" in sys.argv or os.getenv("GITHUB_ACTIONS") == "true"
+USE_FILE_LOGGING = (
+    os.getenv("USE_FILE_LOGGING", "true").lower() == "true" and not IS_TESTING
+)
 
-if USE_FILE_LOGGING:
-    # Production configuration with file logging
+if not IS_TESTING and USE_FILE_LOGGING:
+    # Configuração de logging completa apenas em produção
     LOGGING = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -251,6 +268,11 @@ if USE_FILE_LOGGING:
             },
         },
         "handlers": {
+            "console": {
+                "level": "INFO",
+                "class": "logging.StreamHandler",
+                "formatter": "simple",
+            },
             "file": {
                 "level": "INFO",
                 "class": "logging.FileHandler",
@@ -262,11 +284,6 @@ if USE_FILE_LOGGING:
                 "class": "logging.FileHandler",
                 "filename": "/var/log/django/error.log",
                 "formatter": "verbose",
-            },
-            "console": {
-                "level": "INFO",
-                "class": "logging.StreamHandler",
-                "formatter": "simple",
             },
         },
         "loggers": {
@@ -282,41 +299,7 @@ if USE_FILE_LOGGING:
             },
         },
     }
-else:
-    # Console-only logging for local testing
-    LOGGING = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "verbose": {
-                "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
-                "style": "{",
-            },
-            "simple": {
-                "format": "{levelname} {message}",
-                "style": "{",
-            },
-        },
-        "handlers": {
-            "console": {
-                "level": "INFO",
-                "class": "logging.StreamHandler",
-                "formatter": "verbose",
-            },
-        },
-        "loggers": {
-            "django": {
-                "handlers": ["console"],
-                "level": "INFO",
-                "propagate": True,
-            },
-            "django.request": {
-                "handlers": ["console"],
-                "level": "ERROR",
-                "propagate": False,
-            },
-        },
-    }
+# Para testes/CI, usar logging padrão do Django (sem arquivo)
 
 # JWT Security Settings
 SIMPLE_JWT.update(
