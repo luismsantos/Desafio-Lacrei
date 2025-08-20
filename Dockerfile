@@ -66,7 +66,7 @@ WORKDIR /app
 COPY --chown=appuser:appuser . .
 
 # Garantir que o entrypoint.sh tenha permissões de execução
-RUN chmod +x entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Coletar arquivos estáticos como root antes de mudar para appuser
 RUN python manage.py collectstatic --noinput
@@ -85,5 +85,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
 
 # Usar entrypoint script que funciona tanto para desenvolvimento quanto produção
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--keepalive", "5", "--max-requests", "1000", "--max-requests-jitter", "100", "--preload", "--worker-class", "gthread", "core.wsgi:application"]
