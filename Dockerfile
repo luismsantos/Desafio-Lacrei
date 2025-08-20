@@ -65,7 +65,7 @@ WORKDIR /app
 # Copiar código da aplicação
 COPY --chown=appuser:appuser . .
 
-# Garantir que o entrypoint.sh tenha permissões de execução
+# Garantir que o entrypoint.sh tenha permissões de execuçãod
 RUN chmod +x /app/entrypoint.sh
 
 # Coletar arquivos estáticos como root antes de mudar para appuser
