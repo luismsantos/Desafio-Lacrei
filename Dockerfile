@@ -65,6 +65,9 @@ WORKDIR /app
 # Copiar código da aplicação
 COPY --chown=appuser:appuser . .
 
+# Garantir que o entrypoint.sh tenha permissões de execução
+RUN chmod +x entrypoint.sh
+
 # Coletar arquivos estáticos como root antes de mudar para appuser
 RUN python manage.py collectstatic --noinput
 
@@ -81,5 +84,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
 
-# Comando robusto para produção com configurações otimizadas
-CMD ["sh", "-c", "echo '🚀 Starting Django application...' && python manage.py check --database default && echo '🗄️ Running database migrations...' && python manage.py migrate --noinput && echo '✅ Starting application server...' && gunicorn --bind 0.0.0.0:8000 --workers 2 --threads 4 --timeout 120 --keepalive 5 --max-requests 1000 --max-requests-jitter 100 --preload --worker-class gthread core.wsgi:application"]
+# Usar entrypoint script que funciona tanto para desenvolvimento quanto produção
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--keepalive", "5", "--max-requests", "1000", "--max-requests-jitter", "100", "--preload", "--worker-class", "gthread", "core.wsgi:application"]

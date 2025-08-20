@@ -13,6 +13,11 @@ python manage.py check --database default
 echo "🗄️ Running database migrations..."
 python manage.py migrate --noinput
 
-# Inicializar aplicação
-echo "✅ Starting application server..."
-exec "$@"
+# Verificar se há argumentos passados, senão usar comando padrão
+if [ $# -eq 0 ]; then
+    echo "✅ Starting application server with default Gunicorn settings..."
+    exec gunicorn --bind 0.0.0.0:8000 --workers 2 --threads 4 --timeout 120 --keepalive 5 --max-requests 1000 --max-requests-jitter 100 --preload --worker-class gthread core.wsgi:application
+else
+    echo "✅ Starting application server with custom command: $@"
+    exec "$@"
+fi
