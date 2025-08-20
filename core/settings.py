@@ -227,8 +227,8 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
-# HTTPS Settings (apenas em produção)
-if not DEBUG:
+# HTTPS Settings (apenas em produção, não em testes)
+if not DEBUG and not IS_TESTING:
     SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
     SECURE_HSTS_SECONDS = config(
         "SECURE_HSTS_SECONDS", default=31536000, cast=int
@@ -237,6 +237,10 @@ if not DEBUG:
         "SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True, cast=bool
     )
     SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=True, cast=bool)
+
+# Desabilitar redirecionamentos SSL explicitamente nos testes
+if IS_TESTING:
+    SECURE_SSL_REDIRECT = False
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = config(
