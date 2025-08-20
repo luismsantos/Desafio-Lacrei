@@ -29,11 +29,11 @@
       "secrets": [
         {
           "name": "DATABASE_URL",
-          "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:desafio-lacrei/database-url-oCdgxl"
+          "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:DATABASE_URL-oCdgxl"
         },
         {
           "name": "SECRET_KEY",
-          "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:desafio-lacrei/secret-key-8sSFjk"
+          "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:SECRET_KEY-8sSFjk"
         }
       ],
       "logConfiguration": {
