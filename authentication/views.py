@@ -12,6 +12,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 class LoginRateThrottle(AnonRateThrottle):
     scope = "login"
 
+
 from django.contrib.auth.models import User
 
 from .serializers import (

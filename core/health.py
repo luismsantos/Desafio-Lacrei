@@ -14,6 +14,7 @@ def health_check(request):
     try:
         # Health check rápido com timeout
         from django.db import connection
+
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
@@ -42,9 +43,11 @@ def readiness_check(request):
     try:
         # Check básico se Django está funcionando
         from django.apps import apps
-        
+
         if not apps.ready:
-            return JsonResponse({"status": "not_ready", "reason": "Apps not ready"}, status=503)
+            return JsonResponse(
+                {"status": "not_ready", "reason": "Apps not ready"}, status=503
+            )
 
         # Check rápido de DB (sem queries complexas)
         with connection.cursor() as cursor:

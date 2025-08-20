@@ -211,114 +211,122 @@ SIMPLE_JWT = {
 # Configurações de Segurança
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+X_FRAME_OPTIONS = "DENY"
 
 # HTTPS Settings (apenas em produção)
 if not DEBUG:
-    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
-    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)  # 1 ano
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
-    SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
+    SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
+    SECURE_HSTS_SECONDS = config(
+        "SECURE_HSTS_SECONDS", default=31536000, cast=int
+    )  # 1 ano
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = config(
+        "SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True, cast=bool
+    )
+    SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=True, cast=bool)
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000',
-    cast=lambda v: [s.strip() for s in v.split(',')]
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:3000,http://127.0.0.1:3000",
+    cast=lambda v: [s.strip() for s in v.split(",")],
 )
 
 # Logging Configuration
 # Use console-only logging for local testing when USE_FILE_LOGGING=False
-USE_FILE_LOGGING = os.getenv('USE_FILE_LOGGING', 'True').lower() == 'true'
+USE_FILE_LOGGING = os.getenv("USE_FILE_LOGGING", "True").lower() == "true"
 
 if USE_FILE_LOGGING:
     # Production configuration with file logging
     LOGGING = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'verbose': {
-                'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-                'style': '{',
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "verbose": {
+                "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+                "style": "{",
             },
-            'simple': {
-                'format': '{levelname} {message}',
-                'style': '{',
-            },
-        },
-        'handlers': {
-            'file': {
-                'level': 'INFO',
-                'class': 'logging.FileHandler',
-                'filename': '/var/log/django/application.log',
-                'formatter': 'verbose',
-            },
-            'error_file': {
-                'level': 'ERROR',
-                'class': 'logging.FileHandler',
-                'filename': '/var/log/django/error.log',
-                'formatter': 'verbose',
-            },
-            'console': {
-                'level': 'INFO',
-                'class': 'logging.StreamHandler',
-                'formatter': 'simple',
+            "simple": {
+                "format": "{levelname} {message}",
+                "style": "{",
             },
         },
-        'loggers': {
-            'django': {
-                'handlers': ['file', 'console'],
-                'level': 'INFO',
-                'propagate': True,
+        "handlers": {
+            "file": {
+                "level": "INFO",
+                "class": "logging.FileHandler",
+                "filename": "/var/log/django/application.log",
+                "formatter": "verbose",
             },
-            'django.request': {
-                'handlers': ['error_file'],
-                'level': 'ERROR',
-                'propagate': False,
+            "error_file": {
+                "level": "ERROR",
+                "class": "logging.FileHandler",
+                "filename": "/var/log/django/error.log",
+                "formatter": "verbose",
+            },
+            "console": {
+                "level": "INFO",
+                "class": "logging.StreamHandler",
+                "formatter": "simple",
+            },
+        },
+        "loggers": {
+            "django": {
+                "handlers": ["file", "console"],
+                "level": "INFO",
+                "propagate": True,
+            },
+            "django.request": {
+                "handlers": ["error_file"],
+                "level": "ERROR",
+                "propagate": False,
             },
         },
     }
 else:
     # Console-only logging for local testing
     LOGGING = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'verbose': {
-                'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-                'style': '{',
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "verbose": {
+                "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+                "style": "{",
             },
-            'simple': {
-                'format': '{levelname} {message}',
-                'style': '{',
-            },
-        },
-        'handlers': {
-            'console': {
-                'level': 'INFO',
-                'class': 'logging.StreamHandler',
-                'formatter': 'verbose',
+            "simple": {
+                "format": "{levelname} {message}",
+                "style": "{",
             },
         },
-        'loggers': {
-            'django': {
-                'handlers': ['console'],
-                'level': 'INFO',
-                'propagate': True,
+        "handlers": {
+            "console": {
+                "level": "INFO",
+                "class": "logging.StreamHandler",
+                "formatter": "verbose",
             },
-            'django.request': {
-                'handlers': ['console'],
-                'level': 'ERROR',
-                'propagate': False,
+        },
+        "loggers": {
+            "django": {
+                "handlers": ["console"],
+                "level": "INFO",
+                "propagate": True,
+            },
+            "django.request": {
+                "handlers": ["console"],
+                "level": "ERROR",
+                "propagate": False,
             },
         },
     }
 
 # JWT Security Settings
-SIMPLE_JWT.update({
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Token mais curto para segurança
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
-})
+SIMPLE_JWT.update(
+    {
+        "ACCESS_TOKEN_LIFETIME": timedelta(
+            minutes=15
+        ),  # Token mais curto para segurança
+        "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+        "ROTATE_REFRESH_TOKENS": True,
+        "BLACKLIST_AFTER_ROTATION": True,
+        "UPDATE_LAST_LOGIN": True,
+    }
+)
