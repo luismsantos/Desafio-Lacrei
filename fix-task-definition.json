@@ -1,50 +1,59 @@
 {
-  "family": "desafio-lacrei-production",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "1024",
-  "memory": "2048",
-  "executionRoleArn": "arn:aws:iam::038462749081:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::038462749081:role/ecsTaskRole",
-  "containerDefinitions": [
-    {
-      "name": "desafio-lacrei-app",
-      "image": "ghcr.io/luismsantos/desafio-lacrei:latest",
-      "portMappings": [
+    "family": "desafio-lacrei-production",
+    "containerDefinitions": [
         {
-          "containerPort": 8000,
-          "protocol": "tcp"
+            "name": "desafio-lacrei-app",
+            "image": "ghcr.io/luismsantos/desafio-lacrei:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "DEBUG",
+                    "value": "False"
+                },
+                {
+                    "name": "DJANGO_SETTINGS_MODULE",
+                    "value": "core.settings_production"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "DATABASE_URL",
+                    "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:DATABASE_URL-oCdgxl"
+                },
+                {
+                    "name": "SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:SECRET_KEY-8sSFjk"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/desafio-lacrei-production",
+                    "awslogs-region": "sa-east-1",
+                    "awslogs-stream-prefix": "app"
+                }
+            },
+            "systemControls": []
         }
-      ],
-      "environment": [
-        {
-          "name": "DEBUG",
-          "value": "False"
-        },
-        {
-          "name": "DJANGO_SETTINGS_MODULE",
-          "value": "core.settings_production"
-        }
-      ],
-      "secrets": [
-        {
-          "name": "DATABASE_URL",
-          "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:DATABASE_URL-oCdgxl"
-        },
-        {
-          "name": "SECRET_KEY",
-          "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:SECRET_KEY-8sSFjk"
-        }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/desafio-lacrei-production",
-          "awslogs-region": "sa-east-1",
-          "awslogs-stream-prefix": "app"
-        }
-      },
-      "essential": true
-    }
-  ]
+    ],
+    "taskRoleArn": "arn:aws:iam::038462749081:role/ecsTaskRole",
+    "executionRoleArn": "arn:aws:iam::038462749081:role/ecsTaskExecutionRole",
+    "networkMode": "awsvpc",
+    "volumes": [],
+    "placementConstraints": [],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "1024",
+    "memory": "2048"
 }
