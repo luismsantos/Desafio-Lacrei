@@ -290,7 +290,7 @@ if not IS_TESTING and USE_FILE_LOGGING:
                 "formatter": "verbose",
             },
         },
-                "loggers": {
+        "loggers": {
             "django": {
                 "handlers": ["console"],
                 "level": "INFO",
