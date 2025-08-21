@@ -1,5 +1,5 @@
 # Multi-stage build para otimizar imagem
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim AS builder
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
@@ -25,7 +25,7 @@ RUN poetry export -f requirements.txt --output requirements.txt --without dev &&
     rm -rf $POETRY_CACHE_DIR
 
 # Imagem final
-FROM python:3.11-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 # Instalar dependências de runtime e curl para healthcheck
 RUN apt-get update && apt-get install -y \
