@@ -66,7 +66,7 @@ WORKDIR /app
 COPY --chown=appuser:appuser . .
 
 # Garantir que o entrypoint.sh tenha permissões de execução
-RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/migrate-only.sh
+RUN chmod +x /app/scripts/entrypoint.sh
 
 # Coletar arquivos estáticos como root antes de mudar para appuser
 RUN python manage.py collectstatic --noinput
