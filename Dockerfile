@@ -55,9 +55,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN chown -R appuser:appuser ${VIRTUAL_ENV}
 
 # Criar diretórios necessários com permissões corretas ANTES de mudar para appuser
-RUN mkdir -p /var/log/django staticfiles && \
-    chmod 777 /var/log/django && \
-    chown -R appuser:appuser /var/log/django
+RUN mkdir -p /app/logs staticfiles && \
+    chmod 755 /app/logs && \
+    chown -R appuser:appuser /app/logs staticfiles
 
 # Definir diretório de trabalho
 WORKDIR /app

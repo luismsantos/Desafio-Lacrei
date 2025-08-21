@@ -253,7 +253,7 @@ CORS_ALLOWED_ORIGINS = config(
 # Em testes/CI, usar configuração padrão do Django
 IS_TESTING = "test" in sys.argv or os.getenv("GITHUB_ACTIONS") == "true"
 USE_FILE_LOGGING = (
-    os.getenv("USE_FILE_LOGGING", "true").lower() == "true" and not IS_TESTING
+    os.getenv("USE_FILE_LOGGING", "false").lower() == "true" and not IS_TESTING
 )
 
 if not IS_TESTING and USE_FILE_LOGGING:
@@ -280,25 +280,24 @@ if not IS_TESTING and USE_FILE_LOGGING:
             "file": {
                 "level": "INFO",
                 "class": "logging.FileHandler",
-                "filename": "/var/log/django/application.log",
+                "filename": "/app/logs/application.log",
                 "formatter": "verbose",
             },
             "error_file": {
                 "level": "ERROR",
                 "class": "logging.FileHandler",
-                "filename": "/var/log/django/error.log",
+                "filename": "/app/logs/error.log",
                 "formatter": "verbose",
             },
         },
-        "loggers": {
+                "loggers": {
             "django": {
-                "handlers": ["file", "console"],
+                "handlers": ["console"],
                 "level": "INFO",
-                "propagate": True,
             },
-            "django.request": {
-                "handlers": ["error_file"],
-                "level": "ERROR",
+            "": {
+                "handlers": ["console"],
+                "level": "INFO",
                 "propagate": False,
             },
         },
