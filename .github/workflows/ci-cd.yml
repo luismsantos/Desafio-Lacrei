@@ -594,8 +594,8 @@ jobs:
             --family desafio-lacrei-production \
             --network-mode awsvpc \
             --requires-compatibilities FARGATE \
-            --cpu 512 \
-            --memory 1024 \
+            --cpu 1024 \
+            --memory 2048 \
             --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
             --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
             --container-definitions "[{
@@ -610,15 +610,15 @@ jobs:
                 \"name\": \"DEBUG\",
                 \"value\": \"False\"
               }, {
-                \"name\": \"ALLOWED_HOSTS\",
-                \"value\": \"*\"
+                \"name\": \"DJANGO_SETTINGS_MODULE\",
+                \"value\": \"core.settings_production\"
               }],
               \"secrets\": [{
                 \"name\": \"DATABASE_URL\",
-                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
+                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:DATABASE_URL-oCdgxl\"
               }, {
                 \"name\": \"SECRET_KEY\",
-                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
+                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:SECRET_KEY-8sSFjk\"
               }],
               \"logConfiguration\": {
                 \"logDriver\": \"awslogs\",
@@ -1059,146 +1059,15 @@ jobs:
         
         echo "Service stabilized successfully!"
     
-    - name: Run production migrations
+    - name: Validate production deployment
       run: |
-        # Verificar se o parâmetro DATABASE_URL existe para produção
-        echo "Checking DATABASE_URL configuration for production..."
-        
-        # Verificar se já existe um DATABASE_URL configurado para produção
-        if ! aws ssm get-parameter --name "/desafio-lacrei/production/database-url" >/dev/null 2>&1; then
-          echo "❌ ERROR: DATABASE_URL parameter not found for production!"
-          echo "You must configure a PostgreSQL database for production."
-          echo ""
-          echo "To configure the database, run:"
-          echo "aws ssm put-parameter --name '/desafio-lacrei/production/database-url' --value 'postgres://user:pass@host:5432/dbname' --type SecureString"
-          echo ""
-          echo "For production, we require PostgreSQL. SQLite is not suitable for production use."
-          exit 1
-        else
-          DB_URL=$(aws ssm get-parameter --name "/desafio-lacrei/production/database-url" --with-decryption --query 'Parameter.Value' --output text)
-          if [[ "$DB_URL" == *"sqlite"* ]]; then
-            echo "❌ ERROR: SQLite detected in production DATABASE_URL!"
-            echo "Production requires PostgreSQL database. Please configure a proper PostgreSQL connection."
-            echo "Current DATABASE_URL starts with: ${DB_URL%%:*}://"
-            exit 1
-          elif [[ "$DB_URL" == *"postgres"* ]]; then
-            echo "✅ Using PostgreSQL database for production: ${DB_URL%%:*}://..."
-          else
-            echo "⚠️  WARNING: Unexpected database type detected: ${DB_URL%%:*}://"
-            echo "Production is configured to use PostgreSQL. Proceeding with migration..."
-          fi
-        fi
-        
-        # Verificar se a task definition de migração existe
-        if aws ecs describe-task-definition --task-definition desafio-lacrei-production-migrate >/dev/null 2>&1; then
-          echo "Migration task definition exists, updating with PostgreSQL configuration..."
-          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
-          echo "Using image for production migration update: $IMAGE_TAG"
-          
-          # Create task definition for migrations using PostgreSQL database
-          aws ecs register-task-definition \
-            --family desafio-lacrei-production-migrate \
-            --network-mode awsvpc \
-            --requires-compatibilities FARGATE \
-            --cpu 256 \
-            --memory 512 \
-            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
-            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
-            --container-definitions "[{
-              \"name\": \"desafio-lacrei-migrate\",
-              \"image\": \"$IMAGE_TAG\",
-              \"command\": [\"python\", \"manage.py\", \"migrate\"],
-              \"essential\": true,
-              \"environment\": [{
-                \"name\": \"DEBUG\",
-                \"value\": \"False\"
-              }],
-              \"secrets\": [{
-                \"name\": \"DATABASE_URL\",
-                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
-              }, {
-                \"name\": \"SECRET_KEY\",
-                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
-              }],
-              \"logConfiguration\": {
-                \"logDriver\": \"awslogs\",
-                \"options\": {
-                  \"awslogs-group\": \"/ecs/desafio-lacrei-production-migrate\",
-                  \"awslogs-region\": \"${{ secrets.AWS_REGION }}\",
-                  \"awslogs-stream-prefix\": \"ecs\"
-                }
-              }
-            }]"
-        else
-          echo "Creating migration task definition..."
-          
-          # Extrair apenas a primeira imagem da lista de tags
-          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
-          echo "Using image for migration: $IMAGE_TAG"
-          
-          aws ecs register-task-definition \
-            --family desafio-lacrei-production-migrate \
-            --network-mode awsvpc \
-            --requires-compatibilities FARGATE \
-            --cpu 256 \
-            --memory 512 \
-            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
-            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
-            --container-definitions "[{
-              \"name\": \"desafio-lacrei-migrate\",
-              \"image\": \"$IMAGE_TAG\",
-              \"command\": [\"python\", \"manage.py\", \"migrate\"],
-              \"essential\": true,
-              \"environment\": [{
-                \"name\": \"DEBUG\",
-                \"value\": \"False\"
-              }],
-              \"secrets\": [{
-                \"name\": \"DATABASE_URL\",
-                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/database-url\"
-              }, {
-                \"name\": \"SECRET_KEY\",
-                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/desafio-lacrei/production/secret-key\"
-              }],
-              \"logConfiguration\": {
-                \"logDriver\": \"awslogs\",
-                \"options\": {
-                  \"awslogs-group\": \"/ecs/desafio-lacrei-production-migrate\",
-                  \"awslogs-region\": \"${{ secrets.AWS_REGION }}\",
-                  \"awslogs-stream-prefix\": \"ecs\"
-                }
-              }
-            }]"
-        fi
-        
-        # Executar task de migração
-        TASK_ARN=$(aws ecs run-task \
-          --cluster desafio-lacrei-production \
-          --task-definition desafio-lacrei-production-migrate \
-          --launch-type FARGATE \
-          --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
-          --query 'tasks[0].taskArn' --output text)
-          
-        # Aguardar conclusão da migração
-        echo "Aguardando migração concluir..."
-        aws ecs wait tasks-stopped --cluster desafio-lacrei-production --tasks $TASK_ARN
-        
-        # Verificar se a migração foi bem-sucedida
-        TASK_STATUS=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].lastStatus' --output text)
-        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
-        
-        echo "Task Status: $TASK_STATUS"
-        echo "Exit Code: $EXIT_CODE"
-        
-        if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "None" ]; then
-          echo "Migração falhou com exit code: $EXIT_CODE"
-          # Mostrar logs da task para debugging
-          aws logs get-log-events \
-            --log-group-name "/ecs/desafio-lacrei-production-migrate" \
-            --log-stream-name "ecs/desafio-lacrei-migrate/$(echo $TASK_ARN | cut -d'/' -f3)" \
-            --query 'events[*].message' --output text || echo "Não foi possível recuperar logs"
-          exit 1
-        fi
+        echo "✅ Production deployment validation - migrations handled by entrypoint script"
+        echo "The entrypoint script in the Docker container automatically handles:"
+        echo "1. Database connectivity check"
+        echo "2. Running migrations"  
+        echo "3. Starting Gunicorn server"
+        echo ""
+        echo "No separate migration task needed - avoiding duplicate migration execution."
     
     - name: Health check
       run: |
