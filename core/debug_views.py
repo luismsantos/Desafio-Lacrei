@@ -1,6 +1,7 @@
 """
 Views de debug para diagnóstico de problemas na aplicação.
 """
+
 from django.http import JsonResponse
 from django.views import View
 from django.conf import settings
@@ -43,20 +44,35 @@ class HealthCheckView(View):
                 },
                 "cache": {
                     "status": cache_status,
-                    "backend": redis_config.get("BACKEND") if redis_config else "Not configured",
-                    "location": redis_config.get("LOCATION") if redis_config else "Not configured",
+                    "backend": (
+                        redis_config.get("BACKEND")
+                        if redis_config
+                        else "Not configured"
+                    ),
+                    "location": (
+                        redis_config.get("LOCATION")
+                        if redis_config
+                        else "Not configured"
+                    ),
                 },
-                "apps": [app for app in settings.INSTALLED_APPS if not app.startswith("django")],
+                "apps": [
+                    app
+                    for app in settings.INSTALLED_APPS
+                    if not app.startswith("django")
+                ],
             }
 
             return JsonResponse(response_data, status=200)
 
         except Exception as e:
-            return JsonResponse({
-                "status": "ERROR",
-                "error": str(e),
-                "debug": settings.DEBUG,
-            }, status=500)
+            return JsonResponse(
+                {
+                    "status": "ERROR",
+                    "error": str(e),
+                    "debug": settings.DEBUG,
+                },
+                status=500,
+            )
 
 
 class CacheTestView(View):
@@ -70,6 +86,7 @@ class CacheTestView(View):
         """
         try:
             import redis as redis_lib
+
             redis_available = True
         except ImportError:
             redis_available = False
@@ -80,16 +97,21 @@ class CacheTestView(View):
             cached_value = cache.get("debug_test")
             cache.delete("debug_test")
 
-            return JsonResponse({
-                "cache_test": "SUCCESS",
-                "cached_value": cached_value,
-                "redis_library_available": redis_available,
-                "cache_backend": str(cache),
-            })
+            return JsonResponse(
+                {
+                    "cache_test": "SUCCESS",
+                    "cached_value": cached_value,
+                    "redis_library_available": redis_available,
+                    "cache_backend": str(cache),
+                }
+            )
 
         except Exception as e:
-            return JsonResponse({
-                "cache_test": "FAILED",
-                "error": str(e),
-                "redis_library_available": redis_available,
-            }, status=500)
+            return JsonResponse(
+                {
+                    "cache_test": "FAILED",
+                    "error": str(e),
+                    "redis_library_available": redis_available,
+                },
+                status=500,
+            )
