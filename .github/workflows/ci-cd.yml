@@ -191,9 +191,13 @@ jobs:
         tags: |
           type=raw,value=latest,enable={{is_default_branch}}
           type=raw,value=staging,enable=${{ github.ref == 'refs/heads/develop' }}
+          type=sha,prefix={{branch}}-,format=short
+          type=sha,format=short
         labels: |
           org.opencontainers.image.title=Desafio Lacrei
           org.opencontainers.image.description=Django REST API for Lacrei Challenge
+          org.opencontainers.image.source={{github.server_url}}/{{github.repository}}
+          org.opencontainers.image.revision={{github.sha}}
     
     - name: Build and push Docker image
       id: build
@@ -249,8 +253,11 @@ jobs:
             --force-new-deployment
         else
           echo "Service doesn't exist, creating staging service..."
-          # Primeiro precisamos de uma task definition base para staging
-          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          # Usar imagem específica do commit para staging
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+          IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:$SHORT_SHA"
+          echo "Using staging image: $IMAGE_TAG"
           
           aws ecs register-task-definition \
             --family desafio-lacrei-staging \
@@ -310,10 +317,12 @@ jobs:
     
     - name: Run Database Migrations
       run: |
-        # Verificar se a task ddefinition de migração existe
+        # Verificar se a task definition de migração existe
         if aws ecs describe-task-definition --task-definition desafio-lacrei-staging-migrate >/dev/null 2>&1; then
           echo "Migration task definition exists, updating..."
-          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+          IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:$SHORT_SHA"
           echo "Using image for staging migration update: $IMAGE_TAG"
           
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-staging-migrate --query taskDefinition)
@@ -322,8 +331,10 @@ jobs:
         else
           echo "Creating migration task definition..."
           
-          # Extrair apenas a primeira imagem da lista de tags
-          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
+          # Usar imagem específica do commit para migration
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+          IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:$SHORT_SHA"
           echo "Using image for staging migration: $IMAGE_TAG"
           
           aws ecs register-task-definition \
@@ -402,6 +413,21 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Debug deployment info
+      run: |
+        echo "=== PRODUCTION DEPLOYMENT DEBUG INFO ==="
+        echo "Commit SHA: ${{ github.sha }}"
+        echo "Short SHA: $(echo ${{ github.sha }} | cut -c1-7)"
+        echo "Branch: ${{ github.ref }}"
+        echo "Repository: ${{ github.repository_owner }}/desafio-lacrei"
+        COMMIT_SHA="${{ github.sha }}"
+        SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+        IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:$SHORT_SHA"
+        echo "Target image: $IMAGE_TAG"
+        echo "Build outputs tags: ${{ needs.build.outputs.image-tag }}"
+        echo "Build digest: ${{ needs.build.outputs.image-digest }}"
+        echo "=== END DEBUG INFO ==="
     
     - name: Deploy to ECS Production
       run: |
@@ -493,27 +519,22 @@ jobs:
         sleep 10
         
         # Verificar se a task definition existe e se precisa ser atualizada
-        IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
-        echo "Target image: $IMAGE_TAG"
+        # Usar sempre a imagem específica do commit atual para garantir deployment correto
+        COMMIT_SHA="${{ github.sha }}"
+        SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+        IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:$SHORT_SHA"
+        echo "Target image for this deployment: $IMAGE_TAG"
+        echo "Commit SHA: $COMMIT_SHA"
         
         if aws ecs describe-task-definition --task-definition desafio-lacrei-production >/dev/null 2>&1; then
-          echo "Task definition exists, checking if image needs update..."
+          echo "Task definition exists, creating new revision with updated image..."
           
-          # Verificar imagem atual da task definition
-          CURRENT_IMAGE=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query 'taskDefinition.containerDefinitions[0].image' --output text)
-          echo "Current image: $CURRENT_IMAGE"
-          
-          if [ "$CURRENT_IMAGE" = "$IMAGE_TAG" ]; then
-            echo "Image hasn't changed, reusing existing task definition..."
-            LATEST_REVISION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query 'taskDefinition.revision' --output text)
-            NEW_REVISION=$LATEST_REVISION
-          else
-            echo "Image changed, creating new task definition revision..."
-            TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
-            NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
-            NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
-            NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
-            echo "Created new revision: $NEW_REVISION"
+          # Sempre criar nova task definition com a imagem do commit atual
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
+          NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
+          echo "Created new revision $NEW_REVISION with image: $IMAGE_TAG"
           fi
           
           # Verificar se o serviço existe antes de atualizar
@@ -585,9 +606,11 @@ jobs:
         else
           echo "Task definition doesn't exist, creating initial deployment..."
           
-          # Extrair apenas a primeira imagem da lista de tags
-          IMAGE_TAG=$(echo "${{ needs.build.outputs.image-tag }}" | head -n1)
-          echo "Using image: $IMAGE_TAG"
+          # Usar a mesma lógica de imagem específica do commit
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+          IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:$SHORT_SHA"
+          echo "Using image for initial deployment: $IMAGE_TAG"
           
           # Criar task definition usando parâmetros diretos do AWS CLI
           aws ecs register-task-definition \
@@ -824,7 +847,7 @@ jobs:
                 --task-role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/ecsTaskRole \
                 --container-definitions '[{
                   "name": "desafio-lacrei",
-                  "image": "ghcr.io/${{ github.repository }}:${{ github.sha }}",
+                  "image": "ghcr.io/${{ github.repository_owner }}/desafio-lacrei:${{ github.sha }}",
                   "essential": true,
                   "portMappings": [{
                     "containerPort": 8000,
