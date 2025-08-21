@@ -31,7 +31,7 @@ CACHES = {
     }
 }
 
-# Configurações de logging para produção
+# Configurações de logging para produção - Console only para ECS
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -46,46 +46,39 @@ LOGGING = {
         },
     },
     "handlers": {
-        "file": {
-            "level": "INFO",
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": "/var/log/django/app.log",
-            "maxBytes": 15728640,  # 15MB
-            "backupCount": 10,
-            "formatter": "verbose",
-        },
         "console": {
             "level": "INFO",
             "class": "logging.StreamHandler",
             "formatter": "simple",
         },
-        "mail_admins": {
-            "level": "ERROR",
-            "class": "django.utils.log.AdminEmailHandler",
-            "formatter": "verbose",
-        },
     },
     "root": {
-        "handlers": ["console", "file"],
+        "handlers": ["console"],
+        "level": "INFO",
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file", "mail_admins"],
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "authentication": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "consultas": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "profissionais": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
