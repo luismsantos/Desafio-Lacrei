@@ -8,11 +8,6 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-
-class LoginRateThrottle(AnonRateThrottle):
-    scope = "login"
-
-
 from django.contrib.auth.models import User
 
 from .serializers import (
@@ -20,6 +15,10 @@ from .serializers import (
     UsuarioPerfilSerializer,
     UsuarioRegistroSerializer,
 )
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    scope = "login"
 
 
 @swagger_auto_schema(

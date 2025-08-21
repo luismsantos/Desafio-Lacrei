@@ -25,7 +25,7 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 
 from . import health
-from .debug_views import HealthCheckView, CacheTestView
+from .debug_views import CacheTestView, HealthCheckView
 
 schema_view = get_schema_view(
     openapi.Info(
