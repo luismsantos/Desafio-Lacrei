@@ -86,4 +86,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 # Usar entrypoint script que funciona tanto para desenvolvimento quanto produção
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--keepalive", "5", "--max-requests", "1000", "--max-requests-jitter", "100", "--preload", "--worker-class", "gthread", "core.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--keep-alive", "5", "--max-requests", "1000", "--max-requests-jitter", "100", "--preload", "--worker-class", "gthread", "core.wsgi:application"]
