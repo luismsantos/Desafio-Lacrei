@@ -19,5 +19,12 @@ if [ $# -eq 0 ]; then
     exec gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 --max-requests 1000 --preload core.wsgi:application
 else
     echo "✅ Starting application server with custom command: $@"
-    exec "$@"
+    # Se o comando customizado for migrate, executar mas depois iniciar Gunicorn
+    if [[ "$1" == "python" && "$2" == "manage.py" && "$3" == "migrate" ]]; then
+        python manage.py migrate --noinput
+        echo "✅ Migrations completed, starting Gunicorn..."
+        exec gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 --max-requests 1000 --preload core.wsgi:application
+    else
+        exec "$@"
+    fi
 fi
