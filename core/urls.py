@@ -25,6 +25,7 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 
 from . import health
+from .debug_views import HealthCheckView, CacheTestView
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -52,6 +53,8 @@ urlpatterns = [
     ),
     path("health/", health.health_check, name="health-check"),
     path("ready/", health.readiness_check, name="readiness-check"),
+    path("debug/health/", HealthCheckView.as_view(), name="debug-health"),
+    path("debug/cache/", CacheTestView.as_view(), name="debug-cache"),
     path("api/auth/", include("authentication.urls")),
     path("api/", include("profissionais.urls")),
     path("api/", include("consultas.urls")),

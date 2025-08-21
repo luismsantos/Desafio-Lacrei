@@ -133,6 +133,29 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Cache configuration
+# Usar cache simples para desenvolvimento e Redis para produção
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    }
+}
+
+# Em produção, usar Redis se disponível
+if not DEBUG and not IS_TESTING:
+    redis_url = config("REDIS_URL", default=None)
+    if redis_url:
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": redis_url,
+                "OPTIONS": {
+                    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                },
+                "KEY_PREFIX": "lacrei_cache",
+            }
+        }
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
