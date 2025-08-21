@@ -5,7 +5,7 @@
 # Caso não tenha Poetry instalado, pode usar:
 # pip install -r requirements.txt
 
-Django==5.1.4
+Django==5.2.5
 djangorestframework==3.16.1
 djangorestframework-simplejwt==5.5.1
 drf-yasg==1.21.10
