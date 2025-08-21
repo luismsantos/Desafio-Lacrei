@@ -249,60 +249,45 @@ CORS_ALLOWED_ORIGINS = config(
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
 
-# Logging Configuration - apenas em produção
-# Em testes/CI, usar configuração padrão do Django
-IS_TESTING = "test" in sys.argv or os.getenv("GITHUB_ACTIONS") == "true"
-USE_FILE_LOGGING = (
-    os.getenv("USE_FILE_LOGGING", "false").lower() == "true" and not IS_TESTING
-)
-
-if not IS_TESTING and USE_FILE_LOGGING:
-    # Configuração de logging completa apenas em produção
-    LOGGING = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "verbose": {
-                "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
-                "style": "{",
-            },
-            "simple": {
-                "format": "{levelname} {message}",
-                "style": "{",
-            },
+# Logging Configuration - Console only para ECS
+# Usando apenas console logging para evitar problemas de permissão
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
         },
-        "handlers": {
-            "console": {
-                "level": "INFO",
-                "class": "logging.StreamHandler",
-                "formatter": "simple",
-            },
-            "file": {
-                "level": "INFO",
-                "class": "logging.FileHandler",
-                "filename": "/app/logs/application.log",
-                "formatter": "verbose",
-            },
-            "error_file": {
-                "level": "ERROR",
-                "class": "logging.FileHandler",
-                "filename": "/app/logs/error.log",
-                "formatter": "verbose",
-            },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
         },
-        "loggers": {
-            "django": {
-                "handlers": ["console"],
-                "level": "INFO",
-            },
-            "": {
-                "handlers": ["console"],
-                "level": "INFO",
-                "propagate": False,
-            },
+    },
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
         },
-    }
-# Para testes/CI, usar logging padrão do Django (sem arquivo)
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 # JWT Security Settings
 SIMPLE_JWT.update(
