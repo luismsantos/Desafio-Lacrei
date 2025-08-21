@@ -6,6 +6,9 @@ from .settings import *  # noqa: F403
 # Desabilitar debug em produção
 DEBUG = False
 
+# ALLOWED_HOSTS para produção - permitir IPs dinâmicos do ECS
+ALLOWED_HOSTS = ["*"]  # Para desenvolvimento - em produção usar domínio específico
+
 # Configurações de segurança
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -49,7 +52,7 @@ LOGGING = {
         "console": {
             "level": "INFO",
             "class": "logging.StreamHandler",
-            "formatter": "simple",
+            "formatter": "verbose",  # Mais detalhes em produção
         },
     },
     "root": {
@@ -63,6 +66,11 @@ LOGGING = {
             "propagate": False,
         },
         "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",  # Capturar erros 500
+            "propagate": False,
+        },
+        "django.server": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
