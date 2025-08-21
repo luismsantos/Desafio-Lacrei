@@ -9,12 +9,12 @@ DEBUG = False
 # Configurações de segurança
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-SECURE_HSTS_SECONDS = 31536000
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True  # Desabilitado - sem SSL
+# SECURE_HSTS_PRELOAD = True  # Desabilitado - sem SSL
+# SECURE_HSTS_SECONDS = 31536000  # Desabilitado - sem SSL
+SECURE_SSL_REDIRECT = False  # Desabilitado - acesso direto HTTP
+SESSION_COOKIE_SECURE = False  # Desabilitado - sem SSL
+CSRF_COOKIE_SECURE = False  # Desabilitado - sem SSL
 X_FRAME_OPTIONS = "DENY"
 
 # Configurações de CORS para produção
