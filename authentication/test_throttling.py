@@ -5,6 +5,7 @@ Testes para verificar rate limiting/throttling nas rotas de autenticação
 import time
 from unittest.mock import patch
 
+from django.test import tag
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -14,6 +15,7 @@ from django.test import override_settings
 from django.urls import reverse
 
 
+@tag('throttling', 'integration')
 class ThrottlingTestCase(APITestCase):
     """Testes para verificar se throttling está funcionando corretamente"""
 
@@ -180,6 +182,7 @@ class ThrottlingTestCase(APITestCase):
                 self.assertTrue(int(response["Retry-After"]) > 0)
 
 
+@tag('throttling', 'integration')
 class ThrottlingIntegrationTestCase(APITestCase):
     """Testes de integração para throttling com cache"""
 

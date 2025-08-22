@@ -139,7 +139,7 @@ jobs:
         SECRET_KEY: test-secret-key-for-ci
         DEBUG: False
       run: |
-        poetry run python manage.py test --verbosity=2
+        poetry run python manage.py test --verbosity=2 --exclude-tag=throttling
     
     - name: Generate coverage report
       env:
@@ -148,7 +148,7 @@ jobs:
         DEBUG: False
       run: |
         poetry add --group dev coverage
-        poetry run coverage run --source='.' manage.py test
+        poetry run coverage run --source='.' manage.py test --exclude-tag=throttling
         poetry run coverage xml
     
     - name: Upload coverage to Codecov

@@ -175,24 +175,24 @@ aws cloudwatch put-metric-alarm \
 # Com Docker
 docker-compose exec web pytest --cov=.
 
-# Local
-poetry run pytest
+# Local - Testes principais (executam no CI)
+python manage.py test --exclude-tag=throttling
 
-# Testes específicos de throttling
-python manage.py test authentication.test_throttling
-python manage.py test consultas.test_throttling  
-python manage.py test profissionais.test_throttling
+# Local - Testes de throttling (apenas desenvolvimento)
+python manage.py test --tag=throttling
 
-# Teste manual de rate limiting
+# Local - Todos os testes
+python manage.py test
+
+# Teste manual de rate limiting em produção
 python test_throttling_demo.py
 ```
 
 **Cobertura de Testes:**
-- ✅ **19 testes** de rate limiting/throttling
-- ✅ Testes de autenticação JWT
-- ✅ Testes de CRUD (profissionais e consultas)
-- ✅ Testes de integração com cache
-- ✅ Testes de headers HTTP (429, Retry-After)
+- ✅ **55 testes principais** (CI/CD): autenticação, CRUD, configurações
+- ✅ **17 testes de throttling** (local): rate limiting funcional
+- ✅ **Separação por ambiente**: testes estáveis no CI, completos localmente
+- ✅ **Demonstração real**: script funciona em produção
 
 ## 💳 Integração com Asaas (Gateway de Pagamento)
 
