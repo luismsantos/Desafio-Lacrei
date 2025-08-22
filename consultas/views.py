@@ -11,11 +11,11 @@ from .serializers import ConsultaDetalheSerializer, ConsultaSerializer
 
 
 class ListingRateThrottle(AnonRateThrottle):
-    scope = 'listing'
+    scope = "listing"
 
 
 class ConsultaCreateRateThrottle(UserRateThrottle):
-    scope = 'consulta_create'
+    scope = "consulta_create"
 
 
 class ConsultaViewSet(viewsets.ModelViewSet):
@@ -31,9 +31,9 @@ class ConsultaViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_throttles(self):
-        if self.action == 'list':
+        if self.action == "list":
             throttle_classes = [ListingRateThrottle]
-        elif self.action in ['create', 'update', 'partial_update']:
+        elif self.action in ["create", "update", "partial_update"]:
             throttle_classes = [ConsultaCreateRateThrottle]
         else:
             throttle_classes = []

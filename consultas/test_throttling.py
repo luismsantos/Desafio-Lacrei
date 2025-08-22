@@ -1,6 +1,7 @@
 """
 Testes de throttling para consultas
 """
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -19,26 +20,24 @@ class ConsultaThrottlingTestCase(APITestCase):
     def setUp(self):
         """Configurar dados de teste"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
-        
+
         self.profissional = Profissional.objects.create(
             nome="Dr. Test",
             email="dr.test@example.com",
             especialidade="Clínico Geral",
-            telefone="11999999999"
+            telefone="11999999999",
         )
-        
+
         self.list_url = reverse("consulta-list")
         self.consulta_data = {
             "profissional": self.profissional.id,
             "paciente_nome": "Paciente Teste",
             "data_hora": "2025-08-25T14:30:00",
-            "observacoes": "Consulta de teste"
+            "observacoes": "Consulta de teste",
         }
-        
+
         cache.clear()
 
     def tearDown(self):
@@ -59,11 +58,11 @@ class ConsultaThrottlingTestCase(APITestCase):
         # Primeira request deve passar
         response1 = self.client.get(self.list_url)
         self.assertNotEqual(response1.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Segunda request deve passar
         response2 = self.client.get(self.list_url)
         self.assertNotEqual(response2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Terceira request deve ser throttled
         response3 = self.client.get(self.list_url)
         self.assertEqual(response3.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
@@ -81,11 +80,11 @@ class ConsultaThrottlingTestCase(APITestCase):
     def test_consulta_create_throttling(self):
         """Testa throttling na criação de consultas"""
         self.client.force_authenticate(user=self.user)
-        
+
         # Primeira criação deve passar
         response1 = self.client.post(self.list_url, self.consulta_data)
         self.assertNotEqual(response1.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Segunda criação deve ser throttled
         self.consulta_data["paciente_nome"] = "Outro Paciente"
         response2 = self.client.post(self.list_url, self.consulta_data)
@@ -98,19 +97,17 @@ class ProfissionalThrottlingTestCase(APITestCase):
     def setUp(self):
         """Configurar dados de teste"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com", 
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
-        
+
         self.list_url = reverse("profissional-list")
         self.profissional_data = {
             "nome": "Dr. Teste Throttling",
             "email": "dr.throttling@example.com",
             "especialidade": "Cardiologia",
-            "telefone": "21987654321"
+            "telefone": "21987654321",
         }
-        
+
         cache.clear()
 
     def tearDown(self):
@@ -131,11 +128,11 @@ class ProfissionalThrottlingTestCase(APITestCase):
         # Primeira request deve passar
         response1 = self.client.get(self.list_url)
         self.assertNotEqual(response1.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Segunda request deve passar
         response2 = self.client.get(self.list_url)
         self.assertNotEqual(response2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Terceira request deve ser throttled
         response3 = self.client.get(self.list_url)
         self.assertEqual(response3.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
@@ -153,11 +150,11 @@ class ProfissionalThrottlingTestCase(APITestCase):
     def test_profissional_create_throttling(self):
         """Testa throttling na criação de profissionais"""
         self.client.force_authenticate(user=self.user)
-        
+
         # Primeira criação deve passar
         response1 = self.client.post(self.list_url, self.profissional_data)
         self.assertNotEqual(response1.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Segunda criação deve ser throttled
         self.profissional_data["email"] = "outro.dr@example.com"
         response2 = self.client.post(self.list_url, self.profissional_data)
@@ -187,19 +184,19 @@ class IntegratedThrottlingTestCase(APITestCase):
         """Testa se throttling anônimo funciona entre diferentes endpoints"""
         consulta_url = reverse("consulta-list")
         profissional_url = reverse("profissional-list")
-        
+
         # Request 1: consulta
         response1 = self.client.get(consulta_url)
         self.assertNotEqual(response1.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
-        # Request 2: profissional 
+
+        # Request 2: profissional
         response2 = self.client.get(profissional_url)
         self.assertNotEqual(response2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Request 3: consulta novamente
         response3 = self.client.get(consulta_url)
         self.assertNotEqual(response3.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        
+
         # Request 4: deve ser throttled (global limit)
         response4 = self.client.get(profissional_url)
         self.assertEqual(response4.status_code, status.HTTP_429_TOO_MANY_REQUESTS)

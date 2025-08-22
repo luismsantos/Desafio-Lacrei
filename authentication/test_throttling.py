@@ -1,6 +1,7 @@
 """
 Testes para verificar rate limiting/throttling nas rotas de autenticação
 """
+
 import time
 from unittest.mock import patch
 
@@ -20,7 +21,7 @@ class ThrottlingTestCase(APITestCase):
         """Configurar dados de teste"""
         self.login_url = reverse("auth-entrar")
         self.register_url = reverse("auth-registrar")
-        
+
         # Usuário de teste
         self.test_user = User.objects.create_user(
             username="testuser",
@@ -29,7 +30,7 @@ class ThrottlingTestCase(APITestCase):
             first_name="Test",
             last_name="User",
         )
-        
+
         # Limpar cache antes de cada teste
         cache.clear()
 
@@ -62,13 +63,19 @@ class ThrottlingTestCase(APITestCase):
         for i in range(3):  # Limite é 3/min nos settings de teste
             response = self.client.post(self.login_url, login_data)
             # Pode dar 200 (sucesso) ou 400 (credenciais inválidas), mas não 429
-            self.assertNotEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS, 
-                              f"Request {i+1} foi throttled quando não deveria")
+            self.assertNotEqual(
+                response.status_code,
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                f"Request {i+1} foi throttled quando não deveria",
+            )
 
         # A próxima request deve ser throttled
         response = self.client.post(self.login_url, login_data)
-        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS, 
-                        "Request extra não foi throttled")
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Request extra não foi throttled",
+        )
         self.assertIn("detail", response.data)
         self.assertIn("throttled", response.data["detail"].lower())
 
@@ -86,7 +93,7 @@ class ThrottlingTestCase(APITestCase):
         """Testa throttling na rota de registro"""
         register_data = {
             "username": "newuser",
-            "email": "newuser@example.com", 
+            "email": "newuser@example.com",
             "senha": "newpass123",
             "confirmar_senha": "newpass123",
             "first_name": "New",
@@ -100,7 +107,7 @@ class ThrottlingTestCase(APITestCase):
         # Mudar dados para segunda tentativa
         register_data["username"] = "newuser2"
         register_data["email"] = "newuser2@example.com"
-        
+
         # Segunda tentativa deve funcionar
         response = self.client.post(self.register_url, register_data)
         self.assertNotEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
@@ -108,17 +115,17 @@ class ThrottlingTestCase(APITestCase):
         # Terceira tentativa deve ser throttled
         register_data["username"] = "newuser3"
         register_data["email"] = "newuser3@example.com"
-        
+
         response = self.client.post(self.register_url, register_data)
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def test_login_specific_throttle_class(self):
         """Testa se LoginRateThrottle está sendo aplicado na view de login"""
         from authentication.views import LoginRateThrottle
-        
+
         # Verificar se a classe de throttling personalizada existe
-        self.assertTrue(hasattr(LoginRateThrottle, 'scope'))
-        self.assertEqual(LoginRateThrottle.scope, 'login')
+        self.assertTrue(hasattr(LoginRateThrottle, "scope"))
+        self.assertEqual(LoginRateThrottle.scope, "login")
 
     @override_settings(
         REST_FRAMEWORK={
@@ -136,8 +143,11 @@ class ThrottlingTestCase(APITestCase):
         # Fazer muitas requests - todas devem passar
         for i in range(10):
             response = self.client.post(self.login_url, login_data)
-            self.assertNotEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
-                              f"Request {i+1} foi throttled quando throttling está desabilitado")
+            self.assertNotEqual(
+                response.status_code,
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                f"Request {i+1} foi throttled quando throttling está desabilitado",
+            )
 
     def test_throttle_headers_present_when_throttled(self):
         """Testa se headers de throttling estão presentes quando limitado"""
@@ -152,7 +162,7 @@ class ThrottlingTestCase(APITestCase):
             }
         ):
             login_data = {
-                "username": "testuser", 
+                "username": "testuser",
                 "senha": "testpass123",
             }
 
@@ -164,8 +174,8 @@ class ThrottlingTestCase(APITestCase):
             response = self.client.post(self.login_url, login_data)
             if response.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
                 # Verificar se headers de retry estão presentes
-                self.assertIn('Retry-After', response)
-                self.assertTrue(int(response['Retry-After']) > 0)
+                self.assertIn("Retry-After", response)
+                self.assertTrue(int(response["Retry-After"]) > 0)
 
 
 class ThrottlingIntegrationTestCase(APITestCase):
@@ -181,7 +191,7 @@ class ThrottlingIntegrationTestCase(APITestCase):
         """Testa se as chaves de cache para throttling são geradas corretamente"""
         # Este teste verifica indiretamente se o cache está sendo usado
         # fazendo requests e verificando se o throttling persiste
-        
+
         with override_settings(
             REST_FRAMEWORK={
                 "DEFAULT_THROTTLE_CLASSES": [
@@ -197,17 +207,23 @@ class ThrottlingIntegrationTestCase(APITestCase):
 
             # Primeira request
             response1 = self.client.post(login_url, login_data)
-            
+
             # Segunda request deve ser throttled se cache está funcionando
             response2 = self.client.post(login_url, login_data)
-            
+
             # Se o cache estiver funcionando, uma das requests deve ser throttled
-            responses_429 = [r for r in [response1, response2] 
-                           if r.status_code == status.HTTP_429_TOO_MANY_REQUESTS]
-            
+            responses_429 = [
+                r
+                for r in [response1, response2]
+                if r.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+            ]
+
             # Deve haver pelo menos uma resposta throttled
-            self.assertGreaterEqual(len(responses_429), 1, 
-                                  "Nenhuma request foi throttled - cache pode não estar funcionando")
+            self.assertGreaterEqual(
+                len(responses_429),
+                1,
+                "Nenhuma request foi throttled - cache pode não estar funcionando",
+            )
 
     def test_different_ips_have_separate_throttle_limits(self):
         """Testa se IPs diferentes têm limites de throttling separados"""
@@ -225,16 +241,24 @@ class ThrottlingIntegrationTestCase(APITestCase):
             login_data = {"username": "test", "senha": "test"}
 
             # Request do IP 1
-            response1 = self.client.post(login_url, login_data, 
-                                       HTTP_X_FORWARDED_FOR='1.1.1.1')
-            
+            response1 = self.client.post(
+                login_url, login_data, HTTP_X_FORWARDED_FOR="1.1.1.1"
+            )
+
             # Request do IP 2 (deve ser permitida mesmo que IP 1 tenha sido throttled)
-            response2 = self.client.post(login_url, login_data,
-                                       HTTP_X_FORWARDED_FOR='2.2.2.2')
-            
+            response2 = self.client.post(
+                login_url, login_data, HTTP_X_FORWARDED_FOR="2.2.2.2"
+            )
+
             # Pelo menos uma das requests não deve ser throttled
-            non_throttled = [r for r in [response1, response2] 
-                           if r.status_code != status.HTTP_429_TOO_MANY_REQUESTS]
-            
-            self.assertGreaterEqual(len(non_throttled), 1,
-                                  "Ambas requests foram throttled - IPs podem não estar sendo diferenciados")
+            non_throttled = [
+                r
+                for r in [response1, response2]
+                if r.status_code != status.HTTP_429_TOO_MANY_REQUESTS
+            ]
+
+            self.assertGreaterEqual(
+                len(non_throttled),
+                1,
+                "Ambas requests foram throttled - IPs podem não estar sendo diferenciados",
+            )

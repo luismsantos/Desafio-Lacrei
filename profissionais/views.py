@@ -13,11 +13,11 @@ from .serializers import (
 
 
 class ListingRateThrottle(AnonRateThrottle):
-    scope = 'listing'
+    scope = "listing"
 
 
 class ProfissionalCreateRateThrottle(UserRateThrottle):
-    scope = 'profissional_create'
+    scope = "profissional_create"
 
 
 class ProfissionalViewSet(viewsets.ModelViewSet):
@@ -32,9 +32,9 @@ class ProfissionalViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_throttles(self):
-        if self.action == 'list':
+        if self.action == "list":
             throttle_classes = [ListingRateThrottle]
-        elif self.action in ['create', 'update', 'partial_update']:
+        elif self.action in ["create", "update", "partial_update"]:
             throttle_classes = [ProfissionalCreateRateThrottle]
         else:
             throttle_classes = []
