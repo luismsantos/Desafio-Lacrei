@@ -34,7 +34,7 @@ CACHES = {
         "OPTIONS": {
             "MAX_ENTRIES": 1000,
             "CULL_FREQUENCY": 3,
-        }
+        },
     }
 }
 
@@ -122,5 +122,5 @@ CONN_MAX_AGE = 60
 # Desabilitar throttling que pode causar problemas com cache
 REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [],  # Desabilitar throttling em produção
-    "DEFAULT_THROTTLE_RATES": {},    # Sem rate limiting
+    "DEFAULT_THROTTLE_RATES": {},  # Sem rate limiting
 }
