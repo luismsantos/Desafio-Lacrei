@@ -2,17 +2,18 @@
 Testes de throttling específicos para profissionais
 """
 
+from rest_framework import status
+from rest_framework.test import APITestCase
+
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.test import override_settings, tag
-from rest_framework import status
-from rest_framework.test import APITestCase
 from django.urls import reverse
 
 from profissionais.models import Profissional
 
 
-@tag('throttling', 'integration')
+@tag("throttling", "integration")
 class ProfissionalThrottlingDetailedTestCase(APITestCase):
     """Testes detalhados para throttling de profissionais"""
 
@@ -160,7 +161,7 @@ class ProfissionalThrottlingDetailedTestCase(APITestCase):
                 )
 
 
-@tag('throttling', 'integration') 
+@tag("throttling", "integration")
 class ProfissionalThrottlingErrorHandlingTestCase(APITestCase):
     """Testes para verificar o tratamento correto de erros de throttling"""
 

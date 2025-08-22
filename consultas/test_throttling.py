@@ -2,18 +2,19 @@
 Testes de throttling para consultas
 """
 
+from rest_framework import status
+from rest_framework.test import APITestCase
+
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.test import override_settings, tag
 from django.urls import reverse
-from rest_framework import status
-from rest_framework.test import APITestCase
 
 from consultas.models import Consulta
 from profissionais.models import Profissional
 
 
-@tag('throttling', 'integration')
+@tag("throttling", "integration")
 class ConsultaThrottlingTestCase(APITestCase):
     """Testes para verificar throttling nas rotas de consulta"""
 
@@ -91,7 +92,7 @@ class ConsultaThrottlingTestCase(APITestCase):
         self.assertEqual(response2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
-@tag('throttling', 'integration')
+@tag("throttling", "integration")
 class ProfissionalThrottlingTestCase(APITestCase):
     """Testes para verificar throttling nas rotas de profissional"""
 
@@ -162,7 +163,7 @@ class ProfissionalThrottlingTestCase(APITestCase):
         self.assertEqual(response2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
-@tag('throttling', 'integration')
+@tag("throttling", "integration")
 class IntegratedThrottlingTestCase(APITestCase):
     """Testes de integração para throttling entre diferentes endpoints"""
 
