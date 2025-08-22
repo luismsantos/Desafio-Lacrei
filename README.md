@@ -1,7 +1,9 @@
 # 🏥 Lacrei Saúde - API de Consultas Médicas
 
-**🚀 [Acesse a API em Produção](http:**Produção:** `http://54.94.34.119:8000` | **Local:** `http://localhost:8000`  
-**📋 Documentação:** `/swagger/`54.94.34.119:8000/swagger/)**
+**🚀 [Acesse a API em Produção](http://54.94.34.119:8000/swagger/)**
+
+**Produção:** `http://54.94.34.119:8000` | **Local:** `http://localhost:8000`  
+**📋 Documentação:** `/swagger/`
 
 ## 🎯 Sobre o Projeto
 
@@ -82,7 +84,7 @@ DEBUG=False
 
 ## 🚀 API Endpoints
 
-**Produção:** `http://54.207.65.222:8000` | **Local:** `http://localhost:8000`  
+**Produção:** `http://54.94.34.119:8000` | **Local:** `http://localhost:8000`  
 **� Documentação:** `/swagger/`
 
 ### Principais Rotas
