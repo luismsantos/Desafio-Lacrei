@@ -4,20 +4,14 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from django.shortcuts import render
 
+from core.throttling import ListingRateThrottle, ProfissionalCreateRateThrottle
+
 from .models import Profissional
 from .serializers import (
     ProfissionalDetalheSerializer,
     ProfissionalListSerializer,
     ProfissionalSerializer,
 )
-
-
-class ListingRateThrottle(AnonRateThrottle):
-    scope = "listing"
-
-
-class ProfissionalCreateRateThrottle(UserRateThrottle):
-    scope = "profissional_create"
 
 
 class ProfissionalViewSet(viewsets.ModelViewSet):

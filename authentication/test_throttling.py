@@ -48,6 +48,7 @@ class ThrottlingTestCase(APITestCase):
                 "anon": "5/min",  # Limite baixo para testes rápidos
                 "user": "10/min",
                 "login": "3/min",  # Limite muito baixo para testar rapidamente
+                "registration": "2/min",  # Para testes de registro
             },
         }
     )
@@ -55,7 +56,7 @@ class ThrottlingTestCase(APITestCase):
         """Testa se o throttling de login funciona corretamente"""
         # Dados válidos de login
         login_data = {
-            "username": "testuser",
+            "nome_usuario": "testuser",
             "senha": "testpass123",
         }
 
@@ -86,6 +87,7 @@ class ThrottlingTestCase(APITestCase):
             ],
             "DEFAULT_THROTTLE_RATES": {
                 "anon": "2/min",  # Limite muito baixo para registro
+                "registration": "2/min",  # Escopo específico para registro
             },
         }
     )
@@ -121,7 +123,7 @@ class ThrottlingTestCase(APITestCase):
 
     def test_login_specific_throttle_class(self):
         """Testa se LoginRateThrottle está sendo aplicado na view de login"""
-        from authentication.views import LoginRateThrottle
+        from core.throttling import LoginRateThrottle
 
         # Verificar se a classe de throttling personalizada existe
         self.assertTrue(hasattr(LoginRateThrottle, "scope"))
@@ -136,7 +138,7 @@ class ThrottlingTestCase(APITestCase):
     def test_throttling_disabled_allows_unlimited_requests(self):
         """Testa que quando throttling está desabilitado, requests são ilimitadas"""
         login_data = {
-            "username": "testuser",
+            "nome_usuario": "testuser",
             "senha": "testpass123",
         }
 
@@ -162,7 +164,7 @@ class ThrottlingTestCase(APITestCase):
             }
         ):
             login_data = {
-                "username": "testuser",
+                "nome_usuario": "testuser",
                 "senha": "testpass123",
             }
 

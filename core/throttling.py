@@ -5,6 +5,10 @@ class ListingRateThrottle(AnonRateThrottle):
     scope = "listing"
 
 
+class LoginRateThrottle(AnonRateThrottle):
+    scope = "login"
+
+
 class RegistrationRateThrottle(AnonRateThrottle):
     scope = "registration"
 

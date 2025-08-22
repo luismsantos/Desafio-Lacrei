@@ -10,19 +10,13 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from django.contrib.auth.models import User
 
+from core.throttling import LoginRateThrottle, RegistrationRateThrottle
+
 from .serializers import (
     UsuarioLoginSerializer,
     UsuarioPerfilSerializer,
     UsuarioRegistroSerializer,
 )
-
-
-class LoginRateThrottle(AnonRateThrottle):
-    scope = "login"
-
-
-class RegistrationRateThrottle(AnonRateThrottle):
-    scope = "registration"
 
 
 @swagger_auto_schema(

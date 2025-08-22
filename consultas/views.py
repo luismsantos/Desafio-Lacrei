@@ -6,16 +6,10 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from django.shortcuts import render
 
+from core.throttling import ConsultaCreateRateThrottle, ListingRateThrottle
+
 from .models import Consulta
 from .serializers import ConsultaDetalheSerializer, ConsultaSerializer
-
-
-class ListingRateThrottle(AnonRateThrottle):
-    scope = "listing"
-
-
-class ConsultaCreateRateThrottle(UserRateThrottle):
-    scope = "consulta_create"
 
 
 class ConsultaViewSet(viewsets.ModelViewSet):

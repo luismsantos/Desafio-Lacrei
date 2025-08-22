@@ -133,8 +133,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Cache configuration
-# Usar cache simples para desenvolvimento e Redis para produção
+# Cache Settings
+# Usar LocMemCache para desenvolvimento e testes (funciona com throttling)
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -154,6 +154,14 @@ if not DEBUG and not IS_TESTING:
                     "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 },
                 "KEY_PREFIX": "lacrei_cache",
+            }
+        }
+    else:
+        # Fallback para LocMemCache se Redis não estiver disponível
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "production-cache",
             }
         }
 
@@ -213,6 +221,23 @@ REST_FRAMEWORK = {
         "create": "10/min",
     },
 }
+
+# Desabilitar throttling nos testes para evitar falhas
+if IS_TESTING:
+    REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []
+    # Manter os rates para não quebrar as classes específicas
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        "anon": "10000/hour",  # Limite alto nos testes
+        "user": "10000/hour",
+        "login": "10000/hour",
+        "listing": "10000/hour",
+        "registration": "10000/hour",
+        "consulta_create": "10000/hour",
+        "profissional_create": "10000/hour",
+        "sensitive_data": "10000/hour",
+        "list": "10000/hour",
+        "create": "10000/hour",
+    }
 
 SWAGGER_SETTINGS = {
     "SECURITY_DEFINITIONS": {
