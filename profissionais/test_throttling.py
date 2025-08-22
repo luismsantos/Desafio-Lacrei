@@ -55,7 +55,7 @@ class ProfissionalThrottlingDetailedTestCase(APITestCase):
             self.assertNotEqual(
                 response.status_code,
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"Retrieve request {i+1} foi throttled quando não deveria",
+                f"Retrieve request {i + 1} foi throttled quando não deveria",
             )
 
     @override_settings(
@@ -156,7 +156,7 @@ class ProfissionalThrottlingDetailedTestCase(APITestCase):
                 self.assertNotEqual(
                     response.status_code,
                     status.HTTP_429_TOO_MANY_REQUESTS,
-                    f"Authenticated request {i+1} foi throttled",
+                    f"Authenticated request {i + 1} foi throttled",
                 )
 
 
@@ -184,7 +184,7 @@ class ProfissionalThrottlingErrorHandlingTestCase(APITestCase):
         list_url = reverse("profissional-list")
 
         # Primeira request
-        response1 = self.client.get(list_url)
+        self.client.get(list_url)
 
         # Segunda request: deve ser throttled
         response2 = self.client.get(list_url)

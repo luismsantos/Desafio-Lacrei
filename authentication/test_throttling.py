@@ -67,7 +67,7 @@ class ThrottlingTestCase(APITestCase):
             self.assertNotEqual(
                 response.status_code,
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"Request {i+1} foi throttled quando não deveria",
+                f"Request {i + 1} foi throttled quando não deveria",
             )
 
         # A próxima request deve ser throttled
@@ -148,7 +148,7 @@ class ThrottlingTestCase(APITestCase):
             self.assertNotEqual(
                 response.status_code,
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"Request {i+1} foi throttled quando throttling está desabilitado",
+                f"Request {i + 1} foi throttled quando throttling está desabilitado",
             )
 
     def test_throttle_headers_present_when_throttled(self):
