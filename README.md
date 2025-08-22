@@ -1,7 +1,7 @@
 # 🏥 Lacrei Saúde - API de Consultas Médicas
 
-**🚀 [Acesse a API em Produção](http**Produção:** `http://54.233.11.251:8000` | **Local:** `http://localhost:8000`  
-**📋 Documentação:** `/swagger/`/54.233.11.251:8000/swagger/)**
+**🚀 [Acesse a API em Produção](http:**Produção:** `http://54.94.34.119:8000` | **Local:** `http://localhost:8000`  
+**📋 Documentação:** `/swagger/`54.94.34.119:8000/swagger/)**
 
 ## 🎯 Sobre o Projeto
 
@@ -109,11 +109,11 @@ DEBUG=False
 
 ```bash
 # Login
-curl -X POST http://54.233.11.251:8000/api/auth/entrar/ \
+curl -X POST http://54.94.34.119:8000/api/auth/entrar/ \
   -d '{"username": "usuario", "password": "senha"}'
 
 # Criar profissional
-curl -X POST http://54.233.11.251:8000/api/profissionais/ \
+curl -X POST http://54.94.34.119:8000/api/profissionais/ \
   -H "Authorization: Bearer SEU_JWT_TOKEN" \
   -d '{"nome": "Dr. João", "nome_social": "João", "especialidade": "Cardiologia"}'
 ```
@@ -161,7 +161,7 @@ aws cloudwatch put-metric-alarm \
 
 ## �🚀 Deploy
 
-**🌩️ AWS:** Aplicação deployada em [http://54.233.11.251:8000/swagger/](http://54.233.11.251:8000/swagger/)
+**🌩️ AWS:** Aplicação deployada em [http://54.94.34.119:8000/swagger/](http://54.94.34.119:8000/swagger/)
 
 **Infraestrutura:**
 - ECS Fargate + PostgreSQL RDS
@@ -250,7 +250,7 @@ POST /webhooks/asaas/
 **Variáveis de Ambiente (Postman):**
 ```json
 {
-  "base_url": "http://54.233.11.251:8000",
+  "base_url": "http://54.94.34.119:8000",
   "jwt_token": "{{access_token}}"
 }
 ```
@@ -301,7 +301,7 @@ SECURE_SSL_REDIRECT=False
 # .env.production  
 DEBUG=False
 CORS_ALLOWED_ORIGINS=https://lacrei.com.br,https://app.lacrei.com.br
-ALLOWED_HOSTS=54.233.11.251,lacrei.com.br
+ALLOWED_HOSTS=54.94.34.119,lacrei.com.br
 SECURE_SSL_REDIRECT=True
 SECURE_HSTS_SECONDS=31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS=True
@@ -381,11 +381,11 @@ aws logs filter-log-events \
 
 ```bash
 # Verificar saúde da aplicação
-curl http://54.233.11.251:8000/health/
+curl http://54.94.34.119:8000/health/
 # Resposta: {"status": "healthy", "database": "ok", "cache": "ok"}
 
 # Verificar readiness (ECS Load Balancer)
-curl http://54.233.11.251:8000/ready/
+curl http://54.94.34.119:8000/ready/
 # Resposta: {"status": "ready", "timestamp": "2025-08-22T01:30:00Z"}
 ```
 
