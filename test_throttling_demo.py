@@ -2,9 +2,10 @@
 """
 Teste simples de throttling - demonstra rate limiting funcionando
 """
-import time
-import requests
 import json
+import time
+
+import requests
 
 BASE_URL = "http://localhost:8001/api"
 
