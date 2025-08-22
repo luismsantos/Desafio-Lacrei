@@ -26,11 +26,15 @@ CORS_ALLOWED_ORIGINS = [
     "https://www.desafio-lacrei.com",
 ]
 
-# Configurações de cache
+# Configurações de cache - Usar cache em memória para produção (sem dependência Redis)
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/1"),
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "production-cache",
+        "OPTIONS": {
+            "MAX_ENTRIES": 1000,
+            "CULL_FREQUENCY": 3,
+        }
     }
 }
 
@@ -113,3 +117,10 @@ RATELIMIT_USE_CACHE = "default"
 
 # Configurações de performance
 CONN_MAX_AGE = 60
+
+# Configurações específicas do Django REST Framework para produção
+# Desabilitar throttling que pode causar problemas com cache
+REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_CLASSES": [],  # Desabilitar throttling em produção
+    "DEFAULT_THROTTLE_RATES": {},    # Sem rate limiting
+}
