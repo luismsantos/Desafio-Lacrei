@@ -21,6 +21,10 @@ class LoginRateThrottle(AnonRateThrottle):
     scope = "login"
 
 
+class RegistrationRateThrottle(AnonRateThrottle):
+    scope = "registration"
+
+
 @swagger_auto_schema(
     method="post",
     request_body=UsuarioRegistroSerializer,
@@ -29,8 +33,8 @@ class LoginRateThrottle(AnonRateThrottle):
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([RegistrationRateThrottle])
 def registrar(request):
-    """Registro de novo usuário"""
     serializer = UsuarioRegistroSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
@@ -65,7 +69,6 @@ def registrar(request):
 @permission_classes([AllowAny])
 @throttle_classes([LoginRateThrottle])
 def entrar(request):
-    """Login do usuário"""
     serializer = UsuarioLoginSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.validated_data["user"]
@@ -108,7 +111,6 @@ def entrar(request):
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def perfil(request):
-    """Perfil do usuário autenticado"""
     user = request.user
 
     if request.method == "GET":
@@ -144,7 +146,6 @@ def perfil(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def sair(request):
-    """Logout do usuário (invalidar refresh token)"""
     try:
         refresh_token = request.data.get("refresh")
         if refresh_token:

@@ -3,30 +3,24 @@ import os
 
 from .settings import *  # noqa: F403
 
-# Desabilitar debug em produção
 DEBUG = False
-
-# ALLOWED_HOSTS para produção - permitir IPs dinâmicos do ECS
-ALLOWED_HOSTS = ["*"]  # Para desenvolvimento - em produção usar domínio específico
+ALLOWED_HOSTS = ["*"]
 
 # Configurações de segurança
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = True  # Desabilitado - sem SSL
-# SECURE_HSTS_PRELOAD = True  # Desabilitado - sem SSL
-# SECURE_HSTS_SECONDS = 31536000  # Desabilitado - sem SSL
-SECURE_SSL_REDIRECT = False  # Desabilitado - acesso direto HTTP
-SESSION_COOKIE_SECURE = False  # Desabilitado - sem SSL
-CSRF_COOKIE_SECURE = False  # Desabilitado - sem SSL
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 X_FRAME_OPTIONS = "DENY"
 
-# Configurações de CORS para produção
+# CORS
 CORS_ALLOWED_ORIGINS = [
     "https://desafio-lacrei.com",
     "https://www.desafio-lacrei.com",
 ]
 
-# Configurações de cache - Usar cache em memória para produção (sem dependência Redis)
+# Cache em memória
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -56,7 +50,7 @@ LOGGING = {
         "console": {
             "level": "INFO",
             "class": "logging.StreamHandler",
-            "formatter": "verbose",  # Mais detalhes em produção
+            "formatter": "verbose",
         },
     },
     "root": {
@@ -71,7 +65,7 @@ LOGGING = {
         },
         "django.request": {
             "handlers": ["console"],
-            "level": "ERROR",  # Capturar erros 500
+            "level": "ERROR",
             "propagate": False,
         },
         "django.server": {
@@ -97,7 +91,7 @@ LOGGING = {
     },
 }
 
-# Configurações de email para produção
+# Email
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
@@ -106,21 +100,30 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@desafio-lacrei.com")
 
-# Configurações de administradores
 ADMINS = [
     ("Admin", os.environ.get("ADMIN_EMAIL", "admin@desafio-lacrei.com")),
 ]
 
-# Configurações de rate limiting
+# Rate limiting
 RATELIMIT_ENABLE = True
 RATELIMIT_USE_CACHE = "default"
 
-# Configurações de performance
 CONN_MAX_AGE = 60
 
-# Configurações específicas do Django REST Framework para produção
-# Desabilitar throttling que pode causar problemas com cache
+# Django REST Framework para produção
 REST_FRAMEWORK = {
-    "DEFAULT_THROTTLE_CLASSES": [],  # Desabilitar throttling em produção
-    "DEFAULT_THROTTLE_RATES": {},  # Sem rate limiting
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "300/hour",
+        "user": "1000/hour", 
+        "login": "10/hour",
+        "registration": "5/hour",
+        "listing": "500/hour",
+        "consulta_create": "50/hour",
+        "profissional_create": "10/hour",
+        "sensitive_data": "100/hour",
+    },
 }

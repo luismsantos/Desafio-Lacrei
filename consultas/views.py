@@ -2,11 +2,20 @@ from rest_framework import viewsets
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from django.shortcuts import render
 
 from .models import Consulta
 from .serializers import ConsultaDetalheSerializer, ConsultaSerializer
+
+
+class ListingRateThrottle(AnonRateThrottle):
+    scope = 'listing'
+
+
+class ConsultaCreateRateThrottle(UserRateThrottle):
+    scope = 'consulta_create'
 
 
 class ConsultaViewSet(viewsets.ModelViewSet):
@@ -15,14 +24,20 @@ class ConsultaViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_permissions(self):
-        """
-        Lista e detalhes são públicos, mas criação, edição e exclusão exigem autenticação
-        """
         if self.action in ["list", "retrieve"]:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    def get_throttles(self):
+        if self.action == 'list':
+            throttle_classes = [ListingRateThrottle]
+        elif self.action in ['create', 'update', 'partial_update']:
+            throttle_classes = [ConsultaCreateRateThrottle]
+        else:
+            throttle_classes = []
+        return [throttle() for throttle in throttle_classes]
 
     def get_queryset(self):
         queryset = super().get_queryset()

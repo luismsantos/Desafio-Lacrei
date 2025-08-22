@@ -204,6 +204,11 @@ REST_FRAMEWORK = {
         "anon": "100/hour",
         "user": "1000/hour",
         "login": "5/min",
+        "listing": "200/hour",  # Para listagens públicas
+        "registration": "3/hour",  # Registro limitado
+        "consulta_create": "20/hour",  # Criação de consultas
+        "profissional_create": "5/hour",  # Criação de profissionais (mais restritiva)
+        "sensitive_data": "50/hour",  # Dados sensíveis
         "list": "100/min",
         "create": "10/min",
     },
