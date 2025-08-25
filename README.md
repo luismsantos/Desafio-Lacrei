@@ -4,8 +4,7 @@
 
 **Produção:** `http://15.228.175.181:8000` | **Local:** `ht## 🚀 Deploy
 
-**🌩️ AWS:** Aplicação deployada em [http://15.228.175.181:8000/swagger/](http://15.228.175.181:8000/swagger/)//localhost:8000`  
-**📋 Documentação:** `/swagger/`5.228.175.181:8000/swagger/)**
+**🌩️ AWS e Documentação:** Aplicação deployada em [http://15.228.175.181:8000/swagger/](http://15.228.175.181:8000/swagger/)  
 
 **Produção:** `http://15.228.175.181:8000` | **Local:** `http://localhost:8000`  
 **📋 Documentação:** `/swagger/`
