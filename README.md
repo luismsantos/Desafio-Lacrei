@@ -1,12 +1,9 @@
 # 🏥 Lacrei Saúde - API de Consultas Médicas
 
-**🚀 [Acesse a API em Produção](http## 🚀 API Endpoints
-
-**Produção:** `http://15.228.175.181:8000` | **Local:** `ht## 🚀 Deploy
-
 **🌩️ AWS e Documentação:** Aplicação deployada em [http://15.228.175.181:8000/swagger/](http://15.228.175.181:8000/swagger/)  
 
-**Produção:** `http://15.228.175.181:8000` | **Local:** `http://localhost:8000`  
+**Produção:** `http://15.228.175.181:8000` 
+
 **📋 Documentação:** `/swagger/`
 
 ## 🎯 Sobre o Projeto
