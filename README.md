@@ -1,8 +1,13 @@
 # 🏥 Lacrei Saúde - API de Consultas Médicas
 
-**🚀 [Acesse a API em Produção](http://54.94.34.119:8000/swagger/)**
+**🚀 [Acesse a API em Produção](http## 🚀 API Endpoints
 
-**Produção:** `http://54.94.34.119:8000` | **Local:** `http://localhost:8000`  
+**Produção:** `http://15.228.175.181:8000` | **Local:** `ht## 🚀 Deploy
+
+**🌩️ AWS:** Aplicação deployada em [http://15.228.175.181:8000/swagger/](http://15.228.175.181:8000/swagger/)//localhost:8000`  
+**📋 Documentação:** `/swagger/`5.228.175.181:8000/swagger/)**
+
+**Produção:** `http://15.228.175.181:8000` | **Local:** `http://localhost:8000`  
 **📋 Documentação:** `/swagger/`
 
 ## 🎯 Sobre o Projeto
@@ -111,11 +116,11 @@ DEBUG=False
 
 ```bash
 # Login
-curl -X POST http://54.94.34.119:8000/api/auth/entrar/ \
+curl -X POST http://15.228.175.181:8000/api/auth/entrar/ \
   -d '{"username": "usuario", "password": "senha"}'
 
 # Criar profissional
-curl -X POST http://54.94.34.119:8000/api/profissionais/ \
+curl -X POST http://15.228.175.181:8000/api/profissionais/ \
   -H "Authorization: Bearer SEU_JWT_TOKEN" \
   -d '{"nome": "Dr. João", "nome_social": "João", "especialidade": "Cardiologia"}'
 ```
@@ -252,7 +257,7 @@ POST /webhooks/asaas/
 **Variáveis de Ambiente (Postman):**
 ```json
 {
-  "base_url": "http://54.94.34.119:8000",
+  "base_url": "http://15.228.175.181:8000",
   "jwt_token": "{{access_token}}"
 }
 ```
@@ -303,7 +308,7 @@ SECURE_SSL_REDIRECT=False
 # .env.production  
 DEBUG=False
 CORS_ALLOWED_ORIGINS=https://lacrei.com.br,https://app.lacrei.com.br
-ALLOWED_HOSTS=54.94.34.119,lacrei.com.br
+ALLOWED_HOSTS=15.228.175.181,lacrei.com.br
 SECURE_SSL_REDIRECT=True
 SECURE_HSTS_SECONDS=31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS=True
@@ -383,11 +388,11 @@ aws logs filter-log-events \
 
 ```bash
 # Verificar saúde da aplicação
-curl http://54.94.34.119:8000/health/
+curl http://15.228.175.181:8000/health/
 # Resposta: {"status": "healthy", "database": "ok", "cache": "ok"}
 
 # Verificar readiness (ECS Load Balancer)
-curl http://54.94.34.119:8000/ready/
+curl http://15.228.175.181:8000/ready/
 # Resposta: {"status": "ready", "timestamp": "2025-08-22T01:30:00Z"}
 ```
 
@@ -628,9 +633,8 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 | Categoria | Antes | Depois | Melhoria |
 |-----------|-------|--------|----------|
-| **Testes** | 44 testes básicos | 63 testes total | +43% cobertura |
-| **Segurança** | JWT básico | JWT + Rate Limiting | +100% proteção |
-| **Arquivos** | 45+ arquivos (alguns obsoletos) | 40 arquivos limpos | -11% bloat |
-| **Documentação** | Básica | Completa + Operational | +300% detalhamento |
-| **Qualidade** | Manual | Automatizada (Black+isort) | +100% consistência |
-| **Observabilidade** | Limitada | Logs + Health Checks | +200% monitoramento |
+| **Testes** | 44 testes básicos | 63 testes total 
+| **Segurança** | JWT básico | JWT + Rate Limiting
+| **Documentação** | Básica | Completa + Operational
+| **Qualidade** | Manual | Automatizada (Black+isort) 
+| **Observabilidade** | Limitada | Logs + Health Checks
