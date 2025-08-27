@@ -28,26 +28,26 @@
             "secrets": [
                 {
                     "name": "DATABASE_URL",
-                    "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:DATABASE_URL-oCdgxl"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:677991536570:secret:DATABASE_URL-oCdgxl"
                 },
                 {
                     "name": "SECRET_KEY",
-                    "valueFrom": "arn:aws:secretsmanager:sa-east-1:038462749081:secret:SECRET_KEY-8sSFjk"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:677991536570:secret:SECRET_KEY-8sSFjk"
                 }
             ],
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
                     "awslogs-group": "/ecs/desafio-lacrei-production",
-                    "awslogs-region": "sa-east-1",
+                    "awslogs-region": "us-east-1",
                     "awslogs-stream-prefix": "app"
                 }
             },
             "systemControls": []
         }
     ],
-    "taskRoleArn": "arn:aws:iam::038462749081:role/ecsTaskRole",
-    "executionRoleArn": "arn:aws:iam::038462749081:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::677991536570:role/ecsTaskRole",
+    "executionRoleArn": "arn:aws:iam::677991536570:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
     "volumes": [],
     "placementConstraints": [],
