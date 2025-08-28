@@ -32,7 +32,7 @@
                 },
                 {
                     "name": "SECRET_KEY",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:677991536570:secret:SECRET_KEY-8sSFjk"
+                    "valueFrom": "arn:aws:secretsmanager:sa-east-1:677991536570:secret:SECRET_KEY-GM2ywA"
                 }
             ],
             "logConfiguration": {
