@@ -28,7 +28,7 @@
             "secrets": [
                 {
                     "name": "DATABASE_URL",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:677991536570:secret:DATABASE_URL-oCdgxl"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:677991536570:secret:DATABASE_URL_PRODUCTION-GzLfsq"
                 },
                 {
                     "name": "SECRET_KEY",
