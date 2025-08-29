@@ -397,6 +397,42 @@ jobs:
           echo "Migração falhou com exit code: $EXIT_CODE"
           exit 1
         fi
+    
+    - name: Health check staging
+      run: |
+        echo "Performing health check via Load Balancer..."
+        
+        # Obter o DNS do Network Load Balancer para staging
+        NLB_DNS=$(aws elbv2 describe-load-balancers --names "desafio-lacrei-nlb-staging" --query 'LoadBalancers[0].DNSName' --output text --region ${{ secrets.AWS_REGION }})
+        
+        if [ ! -z "$NLB_DNS" ] && [ "$NLB_DNS" != "None" ]; then
+          echo "Load Balancer DNS: $NLB_DNS"
+          
+          # Verificar se a aplicação está respondendo corretamente via Load Balancer
+          for i in {1..10}; do
+            if curl -f "http://${NLB_DNS}/health/" --connect-timeout 10 --max-time 30; then
+              echo "✅ Health check passed via Load Balancer"
+              break
+            else
+              echo "⏳ Health check attempt $i/10 - waiting for service to be ready..."
+              
+              # Verificar status do target group
+              TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups --names "desafio-lacrei-tg-v2-staging" --query 'TargetGroups[0].TargetGroupArn' --output text --region ${{ secrets.AWS_REGION }})
+              if [ ! -z "$TARGET_GROUP_ARN" ]; then
+                echo "Checking target health..."
+                aws elbv2 describe-target-health --target-group-arn "$TARGET_GROUP_ARN" --region ${{ secrets.AWS_REGION }}
+              fi
+              
+              if [ $i -eq 10 ]; then
+                echo "❌ Health check failed after 10 attempts"
+                exit 1
+              fi
+              sleep 30
+            fi
+          done
+        else
+          echo "⚠️ Could not retrieve Load Balancer DNS, skipping health check"
+        fi
 
   deploy-production:
     name: 🚀 Deploy to Production
@@ -852,28 +888,38 @@ jobs:
     
     - name: Health check
       run: |
-        # Obter o IP público da task do ECS para verificar saúde
-        TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --query 'taskArns[0]' --output text)
-        if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
-          TASK_IP=$(aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
-          if [ ! -z "$TASK_IP" ]; then
-            PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $TASK_IP --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
-            
-            # Verificar se a aplicação está respondendo corretamente
-            for i in {1..10}; do
-              if curl -f "http://${PUBLIC_IP}:8000/health/" --connect-timeout 10; then
-                echo "Health check passed"
-                break
-              else
-                echo "Health check failed, attempt $i/10"
-                sleep 30
+        echo "Performing health check via Load Balancer..."
+        
+        # Obter o DNS do Network Load Balancer
+        NLB_DNS=$(aws elbv2 describe-load-balancers --names "desafio-lacrei-nlb-production" --query 'LoadBalancers[0].DNSName' --output text --region ${{ secrets.AWS_REGION }})
+        
+        if [ ! -z "$NLB_DNS" ] && [ "$NLB_DNS" != "None" ]; then
+          echo "Load Balancer DNS: $NLB_DNS"
+          
+          # Verificar se a aplicação está respondendo corretamente via Load Balancer
+          for i in {1..10}; do
+            if curl -f "http://${NLB_DNS}/health/" --connect-timeout 10 --max-time 30; then
+              echo "✅ Health check passed via Load Balancer"
+              break
+            else
+              echo "⏳ Health check attempt $i/10 - waiting for service to be ready..."
+              
+              # Verificar status do target group
+              TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups --names "desafio-lacrei-tg-v2-production" --query 'TargetGroups[0].TargetGroupArn' --output text --region ${{ secrets.AWS_REGION }})
+              if [ ! -z "$TARGET_GROUP_ARN" ]; then
+                echo "Checking target health..."
+                aws elbv2 describe-target-health --target-group-arn "$TARGET_GROUP_ARN" --region ${{ secrets.AWS_REGION }}
               fi
-            done
-          else
-            echo "Could not retrieve task IP, skipping health check"
-          fi
+              
+              if [ $i -eq 10 ]; then
+                echo "❌ Health check failed after 10 attempts"
+                exit 1
+              fi
+              sleep 30
+            fi
+          done
         else
-          echo "No running tasks found, skipping health check"
+          echo "⚠️ Could not retrieve Load Balancer DNS, skipping health check"
         fi
 
   rollback:
