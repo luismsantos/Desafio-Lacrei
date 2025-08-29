@@ -231,9 +231,9 @@ jobs:
     - name: Deploy to ECS Staging
       run: |
         # Garantir que o cluster existe
-        if ! aws ecs describe-clusters --clusters desafio-lacrei-staging --query 'clusters[0].clusterName' --output text 2>/dev/null | grep -q "desafio-lacrei-staging"; then
+        if ! aws ecs describe-clusters --clusters desafio-lacrei-cluster-staging --query 'clusters[0].clusterName' --output text 2>/dev/null | grep -q "desafio-lacrei-cluster-staging"; then
           echo "Cluster doesn't exist, creating..."
-          aws ecs create-cluster --cluster-name desafio-lacrei-staging
+          aws ecs create-cluster --cluster-name desafio-lacrei-cluster-staging
           echo "Cluster created successfully!"
         else
           echo "Cluster exists"
@@ -300,8 +300,8 @@ jobs:
             }]"
           
           aws ecs create-service \
-            --cluster desafio-lacrei-staging \
-            --service-name desafio-lacrei-staging-service \
+            --cluster desafio-lacrei-cluster-staging \
+            --service-name desafio-lacrei-service-staging \
             --task-definition desafio-lacrei-staging \
             --desired-count 1 \
             --launch-type FARGATE \
@@ -312,8 +312,8 @@ jobs:
     - name: Wait for deployment
       run: |
         aws ecs wait services-stable \
-          --cluster desafio-lacrei-staging \
-          --services desafio-lacrei-staging-service
+          --cluster desafio-lacrei-cluster-staging \
+          --services desafio-lacrei-service-staging
     
     - name: Run Database Migrations
       run: |
