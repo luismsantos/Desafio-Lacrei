@@ -104,7 +104,7 @@ DEBUG=False
 
 **Consultas (`/api/consultas/`):**
 - `GET /` - Listar consultas ⚠️ Rate limited: 500/hora
-- `POST /` - Agendar consulta ⚠️ Rate limited: 50/hora
+- `POST /` - Agendar consulta ⚠️ Rate limited: 50/horaa
 - `GET /{id}/` - Detalhes
 - `PUT /{id}/` - Atualizar ⚠️ Rate limited: 50/hora
 
