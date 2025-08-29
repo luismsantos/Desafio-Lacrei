@@ -244,11 +244,11 @@ jobs:
         aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-staging-migrate" 2>/dev/null || echo "Migration log group already exists"
         
         # Verificar se o serviço existe, senão criar
-        if aws ecs describe-services --cluster desafio-lacrei-staging --services desafio-lacrei-staging-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-staging-service"; then
+        if aws ecs describe-services --cluster desafio-lacrei-cluster-staging --services desafio-lacrei-service-staging --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-service-staging"; then
           echo "Service exists, updating..."
           aws ecs update-service \
-            --cluster desafio-lacrei-staging \
-            --service desafio-lacrei-staging-service \
+            --cluster desafio-lacrei-cluster-staging \
+            --service desafio-lacrei-service-staging \
             --force-new-deployment
         else
           echo "Service doesn't exist, creating staging service..."
@@ -376,7 +376,7 @@ jobs:
         
         # Executar task de migração
         TASK_ARN=$(aws ecs run-task \
-          --cluster desafio-lacrei-staging \
+          --cluster desafio-lacrei-cluster-staging \
           --task-definition desafio-lacrei-staging-migrate \
           --launch-type FARGATE \
           --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
@@ -384,11 +384,11 @@ jobs:
           
         # Aguardar conclusão da migração
         echo "Aguardando migração concluir..."
-        aws ecs wait tasks-stopped --cluster desafio-lacrei-staging --tasks $TASK_ARN
+        aws ecs wait tasks-stopped --cluster desafio-lacrei-cluster-staging --tasks $TASK_ARN
         
         # Verificar se a migração foi bem-sucedida
-        TASK_STATUS=$(aws ecs describe-tasks --cluster desafio-lacrei-staging --tasks $TASK_ARN --query 'tasks[0].lastStatus' --output text)
-        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-staging --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
+        TASK_STATUS=$(aws ecs describe-tasks --cluster desafio-lacrei-cluster-staging --tasks $TASK_ARN --query 'tasks[0].lastStatus' --output text)
+        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-cluster-staging --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
         
         echo "Task Status: $TASK_STATUS"
         echo "Exit Code: $EXIT_CODE"
@@ -441,8 +441,8 @@ jobs:
 
           # Atualizar o serviço ECS existente
           aws ecs update-service \
-            --cluster "desafio-lacrei-production" \
-            --service "desafio-lacrei-production" \
+            --cluster "desafio-lacrei-cluster-production" \
+            --service "desafio-lacrei-service-production" \
             --task-definition "$TASK_DEFINITION_ARN" \
             --force-new-deployment
 
@@ -452,7 +452,7 @@ jobs:
         echo "Waiting for service to stabilize..."
         
         # Verificar status do serviço antes de aguardar
-        aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production
+        aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production
         
         # Aguardar com timeout reduzido e melhor tratamento de erro
         echo "Starting service stability check..."
@@ -464,17 +464,17 @@ jobs:
           echo "Stability check attempt $WAIT_ATTEMPTS/$MAX_WAIT_ATTEMPTS..."
           
           # Verificar eventos do serviço para detectar problemas específicos
-          SERVICE_EVENTS=$(aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production --query 'services[0].events[0].message' --output text)
+          SERVICE_EVENTS=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].events[0].message' --output text)
           
           # Verificar se há tasks falhando repetidamente
-          FAILED_TASKS_COUNT=$(aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production --query 'services[0].deployments[0].failedTasks' --output text 2>/dev/null || echo "0")
-          RUNNING_COUNT=$(aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production --query 'services[0].runningCount' --output text)
+          FAILED_TASKS_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].deployments[0].failedTasks' --output text 2>/dev/null || echo "0")
+          RUNNING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].runningCount' --output text)
           
           echo "Failed tasks: $FAILED_TASKS_COUNT, Running tasks: $RUNNING_COUNT"
           
           # Verificar se o deployment não está criando tasks (desiredCount: 0)
-          DESIRED_COUNT=$(aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production --query 'services[0].deployments[0].desiredCount' --output text 2>/dev/null || echo "1")
-          PENDING_COUNT=$(aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production --query 'services[0].pendingCount' --output text)
+          DESIRED_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].deployments[0].desiredCount' --output text 2>/dev/null || echo "1")
+          PENDING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].pendingCount' --output text)
           
           echo "Desired count: $DESIRED_COUNT, Pending count: $PENDING_COUNT"
           
@@ -587,7 +587,7 @@ jobs:
             echo "This often indicates network configuration or resource allocation issues"
             
             # Buscar logs de tasks PENDING para entender o problema
-            LATEST_TASK_ARN=$(aws ecs list-tasks --cluster ${{ secrets.CLUSTER_NAME }} --service-name desafio-lacrei-production --desired-status PENDING --query 'taskArns[0]' --output text 2>/dev/null || echo "")
+            LATEST_TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --desired-status PENDING --query 'taskArns[0]' --output text 2>/dev/null || echo "")
             
             if [ -n "$LATEST_TASK_ARN" ] && [ "$LATEST_TASK_ARN" != "None" ]; then
               echo "Checking PENDING task logs: $LATEST_TASK_ARN"
@@ -706,7 +706,7 @@ jobs:
           fi
           
           # Verificar se o serviço está estável
-          if aws ecs wait services-stable --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production --cli-read-timeout 30 --cli-connect-timeout 30; then
+          if aws ecs wait services-stable --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --cli-read-timeout 30 --cli-connect-timeout 30; then
             echo "Service stabilized successfully!"
             break
           fi
@@ -715,7 +715,7 @@ jobs:
           echo "Service not stable yet, checking status..."
           
           # Mostrar status das tasks
-          TASK_ARNS=$(aws ecs list-tasks --cluster ${{ secrets.CLUSTER_NAME }} --service-name desafio-lacrei-production --query 'taskArns[]' --output text)
+          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --query 'taskArns[]' --output text)
           if [ ! -z "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
             echo "Current task ARNs: $TASK_ARNS"
             aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks $TASK_ARNS --query 'tasks[*].{TaskArn:taskArn,LastStatus:lastStatus,DesiredStatus:desiredStatus,HealthStatus:healthStatus}'
@@ -818,9 +818,9 @@ jobs:
           
           # Diagnóstico final completo
           echo "=== FINAL DIAGNOSTICS ==="
-          aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }} --services desafio-lacrei-production
+          aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production
           
-          TASK_ARNS=$(aws ecs list-tasks --cluster ${{ secrets.CLUSTER_NAME }} --service-name desafio-lacrei-production --query 'taskArns[]' --output text)
+          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --query 'taskArns[]' --output text)
           if [ ! -z "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
             echo "=== TASK DETAILS ==="
             aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks $TASK_ARNS
@@ -853,7 +853,7 @@ jobs:
     - name: Health check
       run: |
         # Obter o IP público da task do ECS para verificar saúde
-        TASK_ARN=$(aws ecs list-tasks --cluster ${{ secrets.CLUSTER_NAME }} --service-name desafio-lacrei-production --query 'taskArns[0]' --output text)
+        TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --query 'taskArns[0]' --output text)
         if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
           TASK_IP=$(aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
           if [ ! -z "$TASK_IP" ]; then
@@ -894,19 +894,19 @@ jobs:
     - name: Rollback to previous version
       run: |
         # Obter a task definition anterior
-        CURRENT_TASK_DEF=$(aws ecs describe-services --cluster ${{ secrets.CLUSTER_NAME }}  --services desafio-lacrei-production --query 'services[0].taskDefinition' --output text)
+        CURRENT_TASK_DEF=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].taskDefinition' --output text)
         CURRENT_REVISION=$(echo $CURRENT_TASK_DEF | cut -d':' -f2)
         PREVIOUS_REVISION=$((CURRENT_REVISION - 1))
         
         # Reverter para a versão anterior
         aws ecs update-service \
-          --cluster ${{ secrets.CLUSTER_NAME }} \
-          --service desafio-lacrei-production \
+          --cluster desafio-lacrei-cluster-production \
+          --service desafio-lacrei-service-production \
           --task-definition desafio-lacrei-production:$PREVIOUS_REVISION
         
         # Aguardar estabilização
         aws ecs wait services-stable \
-          --cluster ${{ secrets.CLUSTER_NAME }} \
-          --services desafio-lacrei-production
+          --cluster desafio-lacrei-cluster-production \
+          --services desafio-lacrei-service-production
         
         echo "Rollback completed to revision $PREVIOUS_REVISION"
