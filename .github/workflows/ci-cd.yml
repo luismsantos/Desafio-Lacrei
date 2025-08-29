@@ -244,11 +244,11 @@ jobs:
         aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-staging-migrate" 2>/dev/null || echo "Migration log group already exists"
         
         # Verificar se o serviço existe, senão criar
-        if aws ecs describe-services --cluster desafio-lacrei-staging --services desafio-lacrei-staging-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-staging-service"; then
+        if aws ecs describe-services --cluster desafio-lacrei-cluster-staging --services desafio-lacrei-service-staging --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-service-staging"; then
           echo "Service exists, updating..."
           aws ecs update-service \
-            --cluster desafio-lacrei-staging \
-            --service desafio-lacrei-staging-service \
+            --cluster desafio-lacrei-cluster-staging \
+            --service desafio-lacrei-service-staging \
             --force-new-deployment
         else
           echo "Service doesn't exist, creating staging service..."
@@ -376,7 +376,7 @@ jobs:
         
         # Executar task de migração
         TASK_ARN=$(aws ecs run-task \
-          --cluster desafio-lacrei-staging \
+          --cluster desafio-lacrei-cluster-staging \
           --task-definition desafio-lacrei-staging-migrate \
           --launch-type FARGATE \
           --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
@@ -384,11 +384,11 @@ jobs:
           
         # Aguardar conclusão da migração
         echo "Aguardando migração concluir..."
-        aws ecs wait tasks-stopped --cluster desafio-lacrei-staging --tasks $TASK_ARN
+        aws ecs wait tasks-stopped --cluster desafio-lacrei-cluster-staging --tasks $TASK_ARN
         
         # Verificar se a migração foi bem-sucedida
-        TASK_STATUS=$(aws ecs describe-tasks --cluster desafio-lacrei-staging --tasks $TASK_ARN --query 'tasks[0].lastStatus' --output text)
-        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-staging --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
+        TASK_STATUS=$(aws ecs describe-tasks --cluster desafio-lacrei-cluster-staging --tasks $TASK_ARN --query 'tasks[0].lastStatus' --output text)
+        EXIT_CODE=$(aws ecs describe-tasks --cluster desafio-lacrei-cluster-staging --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
         
         echo "Task Status: $TASK_STATUS"
         echo "Exit Code: $EXIT_CODE"
@@ -396,6 +396,42 @@ jobs:
         if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "None" ]; then
           echo "Migração falhou com exit code: $EXIT_CODE"
           exit 1
+        fi
+    
+    - name: Health check staging
+      run: |
+        echo "Performing health check via Load Balancer..."
+        
+        # Obter o DNS do Network Load Balancer para staging
+        NLB_DNS=$(aws elbv2 describe-load-balancers --names "desafio-lacrei-nlb-staging" --query 'LoadBalancers[0].DNSName' --output text --region ${{ secrets.AWS_REGION }})
+        
+        if [ ! -z "$NLB_DNS" ] && [ "$NLB_DNS" != "None" ]; then
+          echo "Load Balancer DNS: $NLB_DNS"
+          
+          # Verificar se a aplicação está respondendo corretamente via Load Balancer
+          for i in {1..10}; do
+            if curl -f "http://${NLB_DNS}/health/" --connect-timeout 10 --max-time 30; then
+              echo "✅ Health check passed via Load Balancer"
+              break
+            else
+              echo "⏳ Health check attempt $i/10 - waiting for service to be ready..."
+              
+              # Verificar status do target group
+              TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups --names "desafio-lacrei-tg-v2-staging" --query 'TargetGroups[0].TargetGroupArn' --output text --region ${{ secrets.AWS_REGION }})
+              if [ ! -z "$TARGET_GROUP_ARN" ]; then
+                echo "Checking target health..."
+                aws elbv2 describe-target-health --target-group-arn "$TARGET_GROUP_ARN" --region ${{ secrets.AWS_REGION }}
+              fi
+              
+              if [ $i -eq 10 ]; then
+                echo "❌ Health check failed after 10 attempts"
+                exit 1
+              fi
+              sleep 30
+            fi
+          done
+        else
+          echo "⚠️ Could not retrieve Load Balancer DNS, skipping health check"
         fi
 
   deploy-production:
@@ -433,271 +469,26 @@ jobs:
     
     - name: Deploy to ECS Production
       run: |
-        # Garantir que o cluster existe
-        if ! aws ecs describe-clusters --clusters desafio-lacrei-production --query 'clusters[0].clusterName' --output text 2>/dev/null | grep -q "desafio-lacrei-production"; then
-          echo "Cluster doesn't exist, creating..."
-          aws ecs create-cluster --cluster-name desafio-lacrei-production
-          echo "Cluster created successfully!"
-        else
-          echo "Cluster exists"
-        fi
-        
-        # Garantir que os log groups existem
-        aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production" 2>/dev/null || echo "Log group already exists"
-        aws logs create-log-group --log-group-name "/ecs/desafio-lacrei-production-migrate" 2>/dev/null || echo "Migration log group already exists"
-        
-        # Verificar e criar roles IAM se necessário
-        echo "Validating IAM roles..."
-        
-        # Verificar ecsTaskExecutionRole
-        if ! aws iam get-role --role-name ecsTaskExecutionRole >/dev/null 2>&1; then
-          echo "Creating ecsTaskExecutionRole..."
-          aws iam create-role \
-            --role-name ecsTaskExecutionRole \
-            --assume-role-policy-document '{
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Principal": {
-                    "Service": "ecs-tasks.amazonaws.com"
-                  },
-                  "Action": "sts:AssumeRole"
-                }
-              ]
-            }'
-          
-          aws iam attach-role-policy \
-            --role-name ecsTaskExecutionRole \
-            --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-        else
-          echo "ecsTaskExecutionRole already exists"
-        fi
-        
-        # Verificar ecsTaskRole
-        if ! aws iam get-role --role-name ecsTaskRole >/dev/null 2>&1; then
-          echo "Creating ecsTaskRole..."
-          aws iam create-role \
-            --role-name ecsTaskRole \
-            --assume-role-policy-document '{
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Principal": {
-                    "Service": "ecs-tasks.amazonaws.com"
-                  },
-                  "Action": "sts:AssumeRole"
-                }
-              ]
-            }'
-          
-          # Criar policy personalizada para SSM
-          aws iam put-role-policy \
-            --role-name ecsTaskRole \
-            --policy-name ECSTaskRoleSSMPolicy \
-            --policy-document '{
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ssm:GetParameter",
-                    "ssm:GetParameters",
-                    "ssm:GetParametersByPath"
-                  ],
-                  "Resource": [
-                    "arn:aws:ssm:*:*:parameter/desafio-lacrei/*"
-                  ]
-                }
-              ]
-            }'
-        else
-          echo "ecsTaskRole already exists"
-        fi
-        
-        # Aguardar um pouco para que os roles sejam propagados
-        echo "Waiting for IAM roles to propagate..."
-        sleep 10
-        
-        # Verificar se a task definition existe e se precisa ser atualizada
-        # Usar a tag 'latest' para produção garantindo que sempre exista
-        IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:latest"
-        COMMIT_SHA="${{ github.sha }}"
-        SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
-        echo "Target image for this deployment: $IMAGE_TAG"
-        echo "Commit SHA: $COMMIT_SHA (using latest tag for reliability)"
-        
-        if aws ecs describe-task-definition --task-definition desafio-lacrei-production >/dev/null 2>&1; then
-          echo "Task definition exists, creating new revision with updated image..."
-          
-          # Sempre criar nova task definition com a imagem do commit atual
-          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition desafio-lacrei-production --query taskDefinition)
-          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
-          NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
-          NEW_REVISION=$(echo $NEW_TASK_INFO | jq -r '.taskDefinition.revision')
-          echo "Created new revision $NEW_REVISION with image: $IMAGE_TAG"
-          
-          
-          # Verificar se o serviço existe antes de atualizar
-          if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-production-service"; then
-            echo "Service exists, updating with new revision..."
-            aws ecs update-service \
-              --cluster desafio-lacrei-production \
-              --service desafio-lacrei-production-service \
-              --task-definition desafio-lacrei-production:$NEW_REVISION
-          else
-            echo "Service doesn't exist, creating with new task definition..."
-            
-            # Validar que temos todos os parâmetros necessários
-            echo "Validating configuration..."
-            echo "Subnets: ${{ secrets.AWS_SUBNET_1 }}, ${{ secrets.AWS_SUBNET_2 }}"
-            echo "Security Group: ${{ secrets.AWS_SECURITY_GROUP }}"
-            echo "Account ID: ${{ secrets.AWS_ACCOUNT_ID }}"
-            echo "Region: ${{ secrets.AWS_REGION }}"
-            
-            # Verificar se os SSM parameters existem
-            echo "Checking SSM parameters..."
-            MISSING_PARAMS=""
-            
-            if ! aws ssm get-parameter --name "/desafio-lacrei/production/database-url" >/dev/null 2>&1; then
-              echo "WARNING: SSM parameter /desafio-lacrei/production/database-url not found!"
-              MISSING_PARAMS="$MISSING_PARAMS database-url"
-            fi
-            
-            if ! aws ssm get-parameter --name "/desafio-lacrei/production/secret-key" >/dev/null 2>&1; then
-              echo "WARNING: SSM parameter /desafio-lacrei/production/secret-key not found!"
-              MISSING_PARAMS="$MISSING_PARAMS secret-key"  
-            fi
-            
-            if [ ! -z "$MISSING_PARAMS" ]; then
-              echo "Creating placeholder SSM parameters for missing ones: $MISSING_PARAMS"
-              echo "IMPORTANT: Update these parameters with real values after deployment!"
-              
-              if [[ $MISSING_PARAMS == *"database-url"* ]]; then
-                aws ssm put-parameter \
-                  --name "/desafio-lacrei/production/database-url" \
-                  --value "postgres://user:password@localhost:5432/dbname" \
-                  --type SecureString \
-                  --description "Database URL for production - UPDATE WITH REAL VALUES"
-                echo "Created placeholder database-url parameter"
-              fi
-              
-              if [[ $MISSING_PARAMS == *"secret-key"* ]]; then
-                SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
-                aws ssm put-parameter \
-                  --name "/desafio-lacrei/production/secret-key" \
-                  --value "$SECRET_KEY" \
-                  --type SecureString \
-                  --description "Django secret key for production"
-                echo "Created secret-key parameter with generated value"
-              fi
-            fi
-            
-            aws ecs create-service \
-              --cluster desafio-lacrei-production \
-              --service-name desafio-lacrei-production-service \
-              --task-definition desafio-lacrei-production:$NEW_REVISION \
-              --desired-count 1 \
-              --launch-type FARGATE \
-              --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
-              --enable-execute-command
-            
-            echo "ECS service created successfully with revision $NEW_REVISION!"
-          fi
-        else
-          echo "Task definition doesn't exist, creating initial deployment..."
-          
-          # Usar a tag 'latest' para produção garantindo que sempre exista
-          IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/desafio-lacrei:latest"
-          COMMIT_SHA="${{ github.sha }}"
-          SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
-          echo "Using image for initial deployment: $IMAGE_TAG"
-          echo "Commit SHA: $COMMIT_SHA (using latest tag for reliability)"
-          
-          # Criar task definition usando parâmetros diretos do AWS CLI
-          aws ecs register-task-definition \
-            --family desafio-lacrei-production \
-            --network-mode awsvpc \
-            --requires-compatibilities FARGATE \
-            --cpu 1024 \
-            --memory 2048 \
-            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
-            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
-            --container-definitions "[{
-              \"name\": \"desafio-lacrei-app\",
-              \"image\": \"$IMAGE_TAG\",
-              \"portMappings\": [{
-                \"containerPort\": 8000,
-                \"protocol\": \"tcp\"
-              }],
-              \"essential\": true,
-              \"environment\": [{
-                \"name\": \"DEBUG\",
-                \"value\": \"False\"
-              }, {
-                \"name\": \"DJANGO_SETTINGS_MODULE\",
-                \"value\": \"core.settings_production\"
-              }],
-              \"secrets\": [{
-                \"name\": \"DATABASE_URL\",
-                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:DATABASE_URL-oCdgxl\"
-              }, {
-                \"name\": \"SECRET_KEY\",
-                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:SECRET_KEY-8sSFjk\"
-              }],
-              \"logConfiguration\": {
-                \"logDriver\": \"awslogs\",
-                \"options\": {
-                  \"awslogs-group\": \"/ecs/desafio-lacrei-production\",
-                  \"awslogs-region\": \"${{ secrets.AWS_REGION }}\",
-                  \"awslogs-stream-prefix\": \"ecs\"
-                }
-              }
-            }]"
-          
-          # Atualizar ou criar serviço
-          if aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].serviceName' --output text 2>/dev/null | grep -q "desafio-lacrei-production-service"; then
-            echo "Service exists, updating..."
-            aws ecs update-service \
-              --cluster desafio-lacrei-production \
-              --service desafio-lacrei-production-service \
-              --task-definition desafio-lacrei-production \
-              --force-new-deployment
-          else
-            echo "Service doesn't exist, creating..."
-            
-            # Validar configuração antes de criar o serviço
-            echo "Validating configuration..."
-            if [ -z "${{ secrets.AWS_SUBNET_1 }}" ] || [ -z "${{ secrets.AWS_SUBNET_2 }}" ]; then
-              echo "ERROR: AWS_SUBNET_1 and AWS_SUBNET_2 must be configured in GitHub Secrets"
-              exit 1
-            fi
-            
-            if [ -z "${{ secrets.AWS_SECURITY_GROUP }}" ]; then
-              echo "ERROR: AWS_SECURITY_GROUP must be configured in GitHub Secrets"
-              exit 1
-            fi
-            
-            aws ecs create-service \
-              --cluster desafio-lacrei-production \
-              --service-name desafio-lacrei-production-service \
-              --task-definition desafio-lacrei-production \
-              --desired-count 1 \
-              --launch-type FARGATE \
-              --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNET_1 }},${{ secrets.AWS_SUBNET_2 }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUP }}],assignPublicIp=ENABLED}" \
-              --enable-execute-command
-            
-            echo "ECS service created successfully!"
-          fi
-        fi
-    
+
+          TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          # Atualizar o serviço ECS existente
+          aws ecs update-service \
+            --cluster "desafio-lacrei-cluster-production" \
+            --service "desafio-lacrei-service-production" \
+            --task-definition "$TASK_DEFINITION_ARN" \
+            --force-new-deployment
+
+      
     - name: Wait for production deployment
       run: |
         echo "Waiting for service to stabilize..."
         
         # Verificar status do serviço antes de aguardar
-        aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service
+        aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production
         
         # Aguardar com timeout reduzido e melhor tratamento de erro
         echo "Starting service stability check..."
@@ -709,17 +500,17 @@ jobs:
           echo "Stability check attempt $WAIT_ATTEMPTS/$MAX_WAIT_ATTEMPTS..."
           
           # Verificar eventos do serviço para detectar problemas específicos
-          SERVICE_EVENTS=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].events[0].message' --output text)
+          SERVICE_EVENTS=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].events[0].message' --output text)
           
           # Verificar se há tasks falhando repetidamente
-          FAILED_TASKS_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].deployments[0].failedTasks' --output text 2>/dev/null || echo "0")
-          RUNNING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].runningCount' --output text)
+          FAILED_TASKS_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].deployments[0].failedTasks' --output text 2>/dev/null || echo "0")
+          RUNNING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].runningCount' --output text)
           
           echo "Failed tasks: $FAILED_TASKS_COUNT, Running tasks: $RUNNING_COUNT"
           
           # Verificar se o deployment não está criando tasks (desiredCount: 0)
-          DESIRED_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].deployments[0].desiredCount' --output text 2>/dev/null || echo "1")
-          PENDING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].pendingCount' --output text)
+          DESIRED_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].deployments[0].desiredCount' --output text 2>/dev/null || echo "1")
+          PENDING_COUNT=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].pendingCount' --output text)
           
           echo "Desired count: $DESIRED_COUNT, Pending count: $PENDING_COUNT"
           
@@ -791,8 +582,8 @@ jobs:
             # Forçar nova deployment com correções
             echo "Forcing new deployment with all fixes applied..."
             aws ecs update-service \
-              --cluster desafio-lacrei-production \
-              --service desafio-lacrei-production-service \
+              --cluster ${{ secrets.CLUSTER_NAME }} \
+              --service desafio-lacrei-production \
               --force-new-deployment
             
             sleep 45
@@ -816,8 +607,8 @@ jobs:
               # Forçar nova deployment
               echo "Forcing immediate deployment with fixed parameters..."
               aws ecs update-service \
-                --cluster desafio-lacrei-production \
-                --service desafio-lacrei-production-service \
+                --cluster ${{ secrets.CLUSTER_NAME }} \
+                --service desafio-lacrei-production \
                 --force-new-deployment
               
               sleep 45  # Menos tempo de espera para acelerar
@@ -832,16 +623,16 @@ jobs:
             echo "This often indicates network configuration or resource allocation issues"
             
             # Buscar logs de tasks PENDING para entender o problema
-            LATEST_TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --desired-status PENDING --query 'taskArns[0]' --output text 2>/dev/null || echo "")
+            LATEST_TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --desired-status PENDING --query 'taskArns[0]' --output text 2>/dev/null || echo "")
             
             if [ -n "$LATEST_TASK_ARN" ] && [ "$LATEST_TASK_ARN" != "None" ]; then
               echo "Checking PENDING task logs: $LATEST_TASK_ARN"
-              TASK_DEFINITION_ARN=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks "$LATEST_TASK_ARN" --query 'tasks[0].taskDefinitionArn' --output text 2>/dev/null || echo "")
+              TASK_DEFINITION_ARN=$(aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks "$LATEST_TASK_ARN" --query 'tasks[0].taskDefinitionArn' --output text 2>/dev/null || echo "")
               
               # Criar task definition reduzida para melhorar chance de sucesso
               echo "Creating reduced resource task definition for better deployment success..."
               aws ecs register-task-definition \
-                --family desafio-lacrei-production \
+                --family ${{ secrets.CLUSTER_NAME }} \
                 --network-mode awsvpc \
                 --requires-attributes name=com.amazonaws.ecs.capability.docker-remote-api.1.18 \
                 --cpu 256 \
@@ -882,16 +673,16 @@ jobs:
               # Aplicar configuração de rede alternativa (subnets padrão)
               echo "Attempting deployment with default network configuration..."
               aws ecs update-service \
-                --cluster desafio-lacrei-production \
-                --service desafio-lacrei-production-service \
+                --cluster ${{ secrets.CLUSTER_NAME }} \
+                --service desafio-lacrei-production \
                 --network-configuration 'awsvpcConfiguration={subnets=[subnet-12345678],securityGroups=[sg-12345678],assignPublicIp=ENABLED}' \
                 --force-new-deployment || echo "Network config update failed, continuing with force deployment..."
               
               # Se falhou, fazer deployment forçado simples
               echo "Forcing new deployment to break PENDING state..."
               aws ecs update-service \
-                --cluster desafio-lacrei-production \
-                --service desafio-lacrei-production-service \
+                --cluster ${{ secrets.CLUSTER_NAME }} \
+                --service desafio-lacrei-production \
                 --force-new-deployment
               
               sleep 30
@@ -942,8 +733,8 @@ jobs:
             # Forçar nova deployment após correção
             echo "Forcing new deployment after IAM fix..."
             aws ecs update-service \
-              --cluster desafio-lacrei-production \
-              --service desafio-lacrei-production-service \
+              --cluster ${{ secrets.CLUSTER_NAME }} \
+              --service desafio-lacrei-production \
               --force-new-deployment
             
             sleep 60  # Dar tempo para nova deployment começar
@@ -951,7 +742,7 @@ jobs:
           fi
           
           # Verificar se o serviço está estável
-          if aws ecs wait services-stable --cluster desafio-lacrei-production --services desafio-lacrei-production-service --cli-read-timeout 30 --cli-connect-timeout 30; then
+          if aws ecs wait services-stable --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --cli-read-timeout 30 --cli-connect-timeout 30; then
             echo "Service stabilized successfully!"
             break
           fi
@@ -960,13 +751,13 @@ jobs:
           echo "Service not stable yet, checking status..."
           
           # Mostrar status das tasks
-          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --query 'taskArns[]' --output text)
+          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --query 'taskArns[]' --output text)
           if [ ! -z "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
             echo "Current task ARNs: $TASK_ARNS"
-            aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS --query 'tasks[*].{TaskArn:taskArn,LastStatus:lastStatus,DesiredStatus:desiredStatus,HealthStatus:healthStatus}'
+            aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks $TASK_ARNS --query 'tasks[*].{TaskArn:taskArn,LastStatus:lastStatus,DesiredStatus:desiredStatus,HealthStatus:healthStatus}'
             
             # Verificar se há tasks com problemas
-            FAILED_TASKS=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS --query 'tasks[?lastStatus==`STOPPED`]' --output json)
+            FAILED_TASKS=$(aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks $TASK_ARNS --query 'tasks[?lastStatus==`STOPPED`]' --output json)
             if [ "$FAILED_TASKS" != "[]" ]; then
               echo "=== DETECTED FAILED TASKS ==="
               echo "$FAILED_TASKS"
@@ -998,8 +789,8 @@ jobs:
                   # Forçar nova deployment
                   echo "Forcing new deployment with corrected parameters..."
                   aws ecs update-service \
-                    --cluster desafio-lacrei-production \
-                    --service desafio-lacrei-production-service \
+                    --cluster ${{ secrets.CLUSTER_NAME }} \
+                    --service desafio-lacrei-production \
                     --force-new-deployment
                   
                   sleep 60  # Dar tempo para nova deployment começar
@@ -1042,8 +833,8 @@ jobs:
                     # Atualizar serviço com configuração de rede correta
                     echo "Updating service with default network configuration..."
                     aws ecs update-service \
-                      --cluster desafio-lacrei-production \
-                      --service desafio-lacrei-production-service \
+                      --cluster ${{ secrets.CLUSTER_NAME }} \
+                      --service desafio-lacrei-production \
                       --network-configuration "awsvpcConfiguration={subnets=[${SUBNET_ARRAY[0]},${SUBNET_ARRAY[1]}],securityGroups=[$DEFAULT_SG],assignPublicIp=ENABLED}" \
                       --force-new-deployment
                     
@@ -1063,12 +854,12 @@ jobs:
           
           # Diagnóstico final completo
           echo "=== FINAL DIAGNOSTICS ==="
-          aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service
+          aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production
           
-          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --query 'taskArns[]' --output text)
+          TASK_ARNS=$(aws ecs list-tasks --cluster desafio-lacrei-cluster-production --service-name desafio-lacrei-service-production --query 'taskArns[]' --output text)
           if [ ! -z "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
             echo "=== TASK DETAILS ==="
-            aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARNS
+            aws ecs describe-tasks --cluster ${{ secrets.CLUSTER_NAME }} --tasks $TASK_ARNS
             
             # Mostrar logs das tasks que falharam
             for TASK_ARN in $TASK_ARNS; do
@@ -1097,28 +888,38 @@ jobs:
     
     - name: Health check
       run: |
-        # Obter o IP público da task do ECS para verificar saúde
-        TASK_ARN=$(aws ecs list-tasks --cluster desafio-lacrei-production --service-name desafio-lacrei-production-service --query 'taskArns[0]' --output text)
-        if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
-          TASK_IP=$(aws ecs describe-tasks --cluster desafio-lacrei-production --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
-          if [ ! -z "$TASK_IP" ]; then
-            PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $TASK_IP --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
-            
-            # Verificar se a aplicação está respondendo corretamente
-            for i in {1..10}; do
-              if curl -f "http://${PUBLIC_IP}:8000/health/" --connect-timeout 10; then
-                echo "Health check passed"
-                break
-              else
-                echo "Health check failed, attempt $i/10"
-                sleep 30
+        echo "Performing health check via Load Balancer..."
+        
+        # Obter o DNS do Network Load Balancer
+        NLB_DNS=$(aws elbv2 describe-load-balancers --names "desafio-lacrei-nlb-production" --query 'LoadBalancers[0].DNSName' --output text --region ${{ secrets.AWS_REGION }})
+        
+        if [ ! -z "$NLB_DNS" ] && [ "$NLB_DNS" != "None" ]; then
+          echo "Load Balancer DNS: $NLB_DNS"
+          
+          # Verificar se a aplicação está respondendo corretamente via Load Balancer
+          for i in {1..10}; do
+            if curl -f "http://${NLB_DNS}/health/" --connect-timeout 10 --max-time 30; then
+              echo "✅ Health check passed via Load Balancer"
+              break
+            else
+              echo "⏳ Health check attempt $i/10 - waiting for service to be ready..."
+              
+              # Verificar status do target group
+              TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups --names "desafio-lacrei-tg-v2-production" --query 'TargetGroups[0].TargetGroupArn' --output text --region ${{ secrets.AWS_REGION }})
+              if [ ! -z "$TARGET_GROUP_ARN" ]; then
+                echo "Checking target health..."
+                aws elbv2 describe-target-health --target-group-arn "$TARGET_GROUP_ARN" --region ${{ secrets.AWS_REGION }}
               fi
-            done
-          else
-            echo "Could not retrieve task IP, skipping health check"
-          fi
+              
+              if [ $i -eq 10 ]; then
+                echo "❌ Health check failed after 10 attempts"
+                exit 1
+              fi
+              sleep 30
+            fi
+          done
         else
-          echo "No running tasks found, skipping health check"
+          echo "⚠️ Could not retrieve Load Balancer DNS, skipping health check"
         fi
 
   rollback:
@@ -1139,19 +940,19 @@ jobs:
     - name: Rollback to previous version
       run: |
         # Obter a task definition anterior
-        CURRENT_TASK_DEF=$(aws ecs describe-services --cluster desafio-lacrei-production --services desafio-lacrei-production-service --query 'services[0].taskDefinition' --output text)
+        CURRENT_TASK_DEF=$(aws ecs describe-services --cluster desafio-lacrei-cluster-production --services desafio-lacrei-service-production --query 'services[0].taskDefinition' --output text)
         CURRENT_REVISION=$(echo $CURRENT_TASK_DEF | cut -d':' -f2)
         PREVIOUS_REVISION=$((CURRENT_REVISION - 1))
         
         # Reverter para a versão anterior
         aws ecs update-service \
-          --cluster desafio-lacrei-production \
-          --service desafio-lacrei-production-service \
+          --cluster desafio-lacrei-cluster-production \
+          --service desafio-lacrei-service-production \
           --task-definition desafio-lacrei-production:$PREVIOUS_REVISION
         
         # Aguardar estabilização
         aws ecs wait services-stable \
-          --cluster desafio-lacrei-production \
-          --services desafio-lacrei-production-service
+          --cluster desafio-lacrei-cluster-production \
+          --services desafio-lacrei-service-production
         
         echo "Rollback completed to revision $PREVIOUS_REVISION"
