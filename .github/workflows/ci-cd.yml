@@ -284,10 +284,10 @@ jobs:
               }],
               \"secrets\": [{
                 \"name\": \"DATABASE_URL\",
-                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:DATABASE_URL_STAGING-w32Dzz\"
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/staging-database-url\"
               }, {
                 \"name\": \"SECRET_KEY\",
-                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:SECRET_KEY_STAGING-DZG0Sx\"
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/staging-secret-key\"
               }],
               \"logConfiguration\": {
                 \"logDriver\": \"awslogs\",
@@ -345,8 +345,8 @@ jobs:
             --requires-compatibilities FARGATE \
             --cpu 256 \
             --memory 512 \
-            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/desafio-lacrei-task-execution-role-staging" \
-            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/desafio-lacrei-task-role-staging" \
+            --execution-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole" \
+            --task-role-arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskRole" \
             --container-definitions "[{
               \"name\": \"desafio-lacrei-migrate\",
               \"image\": \"$IMAGE_TAG\",
@@ -358,10 +358,10 @@ jobs:
               }],
               \"secrets\": [{
                 \"name\": \"DATABASE_URL\",
-                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:DATABASE_URL_STAGING-w32Dzz\"
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/staging-database-url\"
               }, {
                 \"name\": \"SECRET_KEY\",
-                \"valueFrom\": \"arn:aws:secretsmanager:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:secret:SECRET_KEY_STAGING-DZG0Sx\"
+                \"valueFrom\": \"arn:aws:ssm:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:parameter/staging-secret-key\"
               }],
               \"logConfiguration\": {
                 \"logDriver\": \"awslogs\",
