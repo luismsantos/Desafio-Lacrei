@@ -1,8 +1,11 @@
 # 🏥 Lacrei Saúde - API de Consultas Médicas
 
-**🌩️ AWS e Documentação:** Aplicação deployada em [http://15.228.175.181:8000/swagger/](http://15.228.175.181:8000/swagger/)  
+**🌩️ AWS e Documentação:**
+- Produção: [http://desafio-lacrei-nlb-production-657fb033409387da.elb.us-east-1.amazonaws.com/swagger/](http://desafio-lacrei-nlb-production-657fb033409387da.elb.us-east-1.amazonaws.com/swagger/)
+- Staging: [http://desafio-lacrei-nlb-staging-190c381edd80fd1a.elb.us-east-1.amazonaws.com/swagger/](http://desafio-lacrei-nlb-staging-190c381edd80fd1a.elb.us-east-1.amazonaws.com/swagger/)
 
-**Produção:** `http://15.228.175.181:8000` 
+**Produção:** `http://desafio-lacrei-nlb-production-657fb033409387da.elb.us-east-1.amazonaws.com/swagger` 
+**Staging:** `http://desafio-lacrei-nlb-staging-190c381edd80fd1a.elb.us-east-1.amazonaws.com/swagger/` 
 
 **📋 Documentação:** `/swagger/`
 
@@ -85,8 +88,8 @@ DEBUG=False
 
 ## 🚀 API Endpoints
 
-**Produção:** `http://54.94.34.119:8000` | **Local:** `http://localhost:8000`  
-**� Documentação:** `/swagger/`
+**Produção:** `http://desafio-lacrei-nlb-production-657fb033409387da.elb.us-east-1.amazonaws.com` | **Staging:** `http://desafio-lacrei-nlb-staging-190c381edd80fd1a.elb.us-east-1.amazonaws.com` | **Local:** `http://localhost:8000`  
+**📋 Documentação:** `/swagger/`
 
 ### Principais Rotas
 
@@ -622,15 +625,3 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 - ✅ **WhiteNoise** para servir arquivos estáticos
 - ✅ **Gunicorn** configurado para produção
 - ✅ **Docker multi-stage** build otimizado
-
----
-
-### 📈 **Métricas de Melhoria**
-
-| Categoria | Antes | Depois | Melhoria |
-|-----------|-------|--------|----------|
-| **Testes** | 44 testes básicos | 63 testes total 
-| **Segurança** | JWT básico | JWT + Rate Limiting
-| **Documentação** | Básica | Completa + Operational
-| **Qualidade** | Manual | Automatizada (Black+isort) 
-| **Observabilidade** | Limitada | Logs + Health Checks
