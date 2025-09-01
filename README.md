@@ -99,14 +99,6 @@ docker-compose up --build
 - Usa Gunicorn para performance
 - Sem volumes para máxima estabilidade
 
-### 📁 Arquivos Docker
-
-```bash
-├── Dockerfile              # Multi-stage build otimizado
-├── docker-compose.yml      # Desenvolvimento local
-└── scripts/entrypoint.sh   # Script de inicialização (prod/staging)
-```
-
 ### Variáveis de Ambiente
 ```bash
 DATABASE_URL=postgres://user:password@host:port/database
@@ -193,9 +185,7 @@ aws cloudwatch put-metric-alarm \
   --comparison-operator GreaterThanThreshold
 ```
 
-## �🚀 Deploy
-
-**🌩️ AWS:** Aplicação deployada em [http://54.94.34.119:8000/swagger/](http://54.94.34.119:8000/swagger/)
+## 🚀 Deploy
 
 **Infraestrutura:**
 - ECS Fargate + PostgreSQL RDS
@@ -208,17 +198,24 @@ aws cloudwatch put-metric-alarm \
 ## 🧪 Testes
 
 ```bash
-# Com Docker (recomendado)
+# Com Docker (recomendado - OBRIGATÓRIO para desenvolvimento local)
 docker-compose exec web python manage.py test
 
-# Local com Poetry
-poetry run python manage.py test
-
 # Testes principais (executam no CI/CD)
-python manage.py test --exclude-tag=throttling
+docker-compose exec web python manage.py test --exclude-tag=throttling
 
-# Todos os testes (incluindo throttling - apenas local)
-python manage.py test --verbosity=2
+# Todos os testes (incluindo throttling)
+docker-compose exec web python manage.py test --verbosity=2
+```
+
+**⚠️ IMPORTANTE - Execução Local:**
+
+Para rodar testes **localmente**, é **OBRIGATÓRIO usar Docker**, pois:
+
+1. **Banco PostgreSQL**: Aplicação configurada para PostgreSQL via Docker
+2. **Host "db"**: Referência ao container de banco no docker-compose.yml
+3. **Erro comum**: `could not translate host name "db"` ao tentar `poetry run python manage.py test`
+
 ```
 
 **⚠️ IMPORTANTE - Testes de Throttling:**
