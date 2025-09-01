@@ -7,46 +7,63 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('consultas', '0001_initial'),
-        ('profissionais', '0003_alter_profissional_options_profissional_ativo_and_more'),
+        ("consultas", "0001_initial"),
+        (
+            "profissionais",
+            "0003_alter_profissional_options_profissional_ativo_and_more",
+        ),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='consulta',
-            options={'ordering': ['-data_hora'], 'verbose_name': 'Consulta', 'verbose_name_plural': 'Consultas'},
+            name="consulta",
+            options={
+                "ordering": ["-data_hora"],
+                "verbose_name": "Consulta",
+                "verbose_name_plural": "Consultas",
+            },
         ),
         migrations.AddField(
-            model_name='consulta',
-            name='atualizado_em',
+            model_name="consulta",
+            name="atualizado_em",
             field=models.DateTimeField(auto_now=True),
         ),
         migrations.AddField(
-            model_name='consulta',
-            name='criado_em',
-            field=models.DateTimeField(auto_now_add=True, default=django.utils.timezone.now),
+            model_name="consulta",
+            name="criado_em",
+            field=models.DateTimeField(
+                auto_now_add=True, default=django.utils.timezone.now
+            ),
             preserve_default=False,
         ),
         migrations.AlterField(
-            model_name='consulta',
-            name='data_hora',
+            model_name="consulta",
+            name="data_hora",
             field=models.DateTimeField(db_index=True),
         ),
         migrations.AlterField(
-            model_name='consulta',
-            name='paciente_nome',
+            model_name="consulta",
+            name="paciente_nome",
             field=models.CharField(db_index=True, max_length=100),
         ),
         migrations.AddIndex(
-            model_name='consulta',
-            index=models.Index(fields=['profissional', 'data_hora'], name='consultas_c_profiss_575b29_idx'),
+            model_name="consulta",
+            index=models.Index(
+                fields=["profissional", "data_hora"],
+                name="consultas_c_profiss_575b29_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='consulta',
-            index=models.Index(fields=['data_hora'], name='consultas_c_data_ho_20c880_idx'),
+            model_name="consulta",
+            index=models.Index(
+                fields=["data_hora"], name="consultas_c_data_ho_20c880_idx"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='consulta',
-            constraint=models.UniqueConstraint(fields=('profissional', 'data_hora'), name='unique_consulta_profissional_horario'),
+            model_name="consulta",
+            constraint=models.UniqueConstraint(
+                fields=("profissional", "data_hora"),
+                name="unique_consulta_profissional_horario",
+            ),
         ),
     ]
