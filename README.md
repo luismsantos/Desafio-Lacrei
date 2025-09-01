@@ -64,8 +64,15 @@ core/              # Configurações Django + health checks
 ```
 
 **Modelos principais:**
-- `Profissional`: nome, nome_social, especialidade, email, telefone
-- `Consulta`: profissional, paciente_nome, data_hora, observacoes
+- `Profissional`: nome, nome_social, especialidade, email, telefone + **auditoria e validações**
+- `Consulta`: profissional, paciente_nome, data_hora, observacoes + **constraints e indexes**
+
+**🗃️ Melhorias de Banco de Dados:**
+- ✅ **Campos de auditoria**: `criado_em`, `atualizado_em` em todos os models
+- ✅ **Indexes de performance**: Campos de busca frequente indexados
+- ✅ **Constraints de integridade**: Unique constraint para evitar consultas duplicadas
+- ✅ **Validações**: Telefone brasileiro, prevenção de consultas no passado
+- ✅ **Soft delete**: Campo `ativo` para não perder dados históricos
 
 ## ⚙️ Como Executar
 
